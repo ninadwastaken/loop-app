@@ -1,13 +1,13 @@
-// src/screens/NewPostScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text,
+  View,
+  Text,
   TextInput,
   TouchableOpacity,
   FlatList,
   StyleSheet,
   ActivityIndicator,
-  Alert
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -15,10 +15,17 @@ import {
   getDocs,
   doc,
   setDoc,
-  serverTimestamp
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
 import { Loop } from '../types';
+import {
+  commonStyles,
+  colors,
+  spacing,
+  typography,
+  borderRadius,
+} from '../screens/styles'; // Adjust the path if needed
 
 export default function NewPostScreen() {
   const [loops, setLoops] = useState<Loop[]>([]);
@@ -27,7 +34,6 @@ export default function NewPostScreen() {
   const [submitting, setSubmitting] = useState(false);
   const uid = auth.currentUser?.uid!;
 
-  // Fetch all loops (console-readable under new rules)
   useEffect(() => {
     (async () => {
       try {
@@ -51,11 +57,11 @@ export default function NewPostScreen() {
     try {
       const postRef = doc(collection(db, 'loops', selectedLoop, 'posts'));
       await setDoc(postRef, {
-        content:    content.trim(),
-        posterId:   uid,
-        anon:       false,
-        karma:      0,
-        createdAt:  serverTimestamp()
+        content: content.trim(),
+        posterId: uid,
+        anon: false,
+        karma: 0,
+        createdAt: serverTimestamp(),
       });
       setContent('');
       Alert.alert('Posted!', 'Your post went live 🔥');
@@ -69,8 +75,8 @@ export default function NewPostScreen() {
 
   if (!loops.length) {
     return (
-      <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color="#00d4ff"/>
+      <SafeAreaView style={commonStyles.centerContent}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </SafeAreaView>
     );
   }
@@ -89,14 +95,18 @@ export default function NewPostScreen() {
             <TouchableOpacity
               style={[
                 styles.loopBadge,
-                isSel ? styles.loopSelected : styles.loopUnselected
+                isSel ? styles.loopSelected : styles.loopUnselected,
               ]}
               onPress={() => setSelectedLoop(item.id)}
             >
-              <Text style={[
-                styles.loopText,
-                isSel ? styles.loopTextSel : styles.loopTextUnsel
-              ]}>{item.name}</Text>
+              <Text
+                style={[
+                  styles.loopText,
+                  isSel ? styles.loopTextSel : styles.loopTextUnsel,
+                ]}
+              >
+                {item.name}
+              </Text>
             </TouchableOpacity>
           );
         }}
@@ -105,7 +115,7 @@ export default function NewPostScreen() {
       <TextInput
         style={styles.input}
         placeholder="Write a post..."
-        placeholderTextColor="#666"
+        placeholderTextColor={colors.inputPlaceholder}
         value={content}
         onChangeText={setContent}
         multiline
@@ -116,45 +126,72 @@ export default function NewPostScreen() {
         onPress={handleSubmit}
         disabled={submitting}
       >
-        {submitting
-          ? <ActivityIndicator color="#fff"/>
-          : <Text style={styles.btnText}>Drop It 🔥</Text>
-        }
+        {submitting ? (
+          <ActivityIndicator color={colors.white} />
+        ) : (
+          <Text style={styles.btnText}>Drop It 🔥</Text>
+        )}
       </TouchableOpacity>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex:1, backgroundColor:'#000', padding:16 },
-  center: { flex:1, justifyContent:'center', alignItems:'center', backgroundColor:'#000' },
-  label: { color:'#fff', fontSize:16, marginBottom:8 },
-  loopList:{ paddingBottom:12 },
-  loopBadge:{
-    paddingVertical:6,
-    paddingHorizontal:12,
-    borderRadius:20,
-    marginRight:8
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+    padding: spacing.md,
   },
-  loopSelected: { backgroundColor:'#00d4ff' },
-  loopUnselected: { backgroundColor:'rgba(40,40,40,0.6)' },
-  loopText:{ fontSize:14 },
-  loopTextSel:{ color:'#000' },
-  loopTextUnsel:{ color:'#fff' },
-  input:{
-    flex:1,
-    backgroundColor:'rgba(40,40,40,0.6)',
-    color:'#fff',
-    borderRadius:8,
-    padding:12,
-    textAlignVertical:'top',
-    marginBottom:16
+  label: {
+    color: colors.textPrimary,
+    fontSize: typography.md,
+    marginBottom: spacing.sm,
   },
-  button:{
-    backgroundColor:'#ff6b6b',
-    padding:16,
-    borderRadius:8,
-    alignItems:'center'
+  loopList: {
+    paddingBottom: spacing.md,
   },
-  btnText:{ color:'#fff', fontWeight:'600' }
+  loopBadge: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full,
+    marginRight: spacing.sm,
+  },
+  loopSelected: {
+    backgroundColor: colors.accent,
+  },
+  loopUnselected: {
+    backgroundColor: colors.surfaceDark,
+  },
+  loopText: {
+    fontSize: typography.sm,
+  },
+  loopTextSel: {
+    color: colors.black,
+    fontWeight: '500', // fixed
+  },
+  loopTextUnsel: {
+    color: colors.white,
+    fontWeight: '500', // fixed
+  },
+  input: {
+    flex: 1,
+    backgroundColor: colors.inputBackground,
+    color: colors.inputText,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    textAlignVertical: 'top',
+    marginBottom: spacing.lg,
+    minHeight: 120,
+  },
+  button: {
+    backgroundColor: colors.accent,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  btnText: {
+    color: colors.white,
+    fontWeight: '600', // fixed
+    fontSize: typography.md,
+  },
 });

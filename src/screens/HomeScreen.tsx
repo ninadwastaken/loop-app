@@ -1,4 +1,3 @@
-// src/screens/HomeScreen.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -6,7 +5,7 @@ import {
   FlatList,
   ActivityIndicator,
   StyleSheet,
-  TouchableOpacity
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -20,9 +19,16 @@ import {
   setDoc,
   deleteDoc,
   updateDoc,
-  increment
+  increment,
 } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
+import {
+  commonStyles,
+  colors,
+  typography,
+  spacing,
+  borderRadius,
+} from '../screens/styles.js'; // adjust path as necessary
 
 interface Post {
   id: string;
@@ -42,7 +48,6 @@ export default function HomeScreen() {
   const uid = auth.currentUser?.uid!;
   const navigation = useNavigation<any>();
 
-  // Optimistic vote toggle
   const toggleVote = async (loopId: string, postId: string) => {
     const votePath = `loops/${loopId}/posts/${postId}/votes`;
     const voteRef = doc(db, votePath, uid);
@@ -50,15 +55,11 @@ export default function HomeScreen() {
     const hasVoted = !!localVotes[postId];
     const delta = hasVoted ? -1 : 1;
 
-    // 1) Optimistic UI update
     setLocalVotes(prev => ({ ...prev, [postId]: !hasVoted }));
     setPosts(prev =>
-      prev.map(p =>
-        p.id === postId ? { ...p, karma: p.karma + delta } : p
-      )
+      prev.map(p => (p.id === postId ? { ...p, karma: p.karma + delta } : p))
     );
 
-    // 2) Persist to Firestore
     try {
       if (hasVoted) {
         await deleteDoc(voteRef);
@@ -69,17 +70,13 @@ export default function HomeScreen() {
       }
     } catch (err) {
       console.warn('Vote error:', err);
-      // Rollback on failure
       setLocalVotes(prev => ({ ...prev, [postId]: hasVoted }));
       setPosts(prev =>
-        prev.map(p =>
-          p.id === postId ? { ...p, karma: p.karma - delta } : p
-        )
+        prev.map(p => (p.id === postId ? { ...p, karma: p.karma - delta } : p))
       );
     }
   };
 
-  // Fetch posts + vote status
   const loadPosts = useCallback(async () => {
     try {
       const userRef = doc(db, 'users', uid);
@@ -103,7 +100,7 @@ export default function HomeScreen() {
           allPosts.push({
             id: d.id,
             loopId,
-            ...(d.data() as any)
+            ...(d.data() as any),
           });
         });
       }
@@ -113,7 +110,6 @@ export default function HomeScreen() {
       );
       setPosts(allPosts);
 
-      // Fetch vote status for each post
       const votesState: Record<string, boolean> = {};
       for (const p of allPosts) {
         const voteSnap = await getDocs(
@@ -127,7 +123,6 @@ export default function HomeScreen() {
     }
   }, [uid]);
 
-  // Initial load
   useEffect(() => {
     (async () => {
       await loadPosts();
@@ -135,7 +130,6 @@ export default function HomeScreen() {
     })();
   }, [loadPosts]);
 
-  // Pull-to-refresh
   const onRefresh = async () => {
     setRefreshing(true);
     await loadPosts();
@@ -144,15 +138,15 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color="#00d4ff" />
+      <SafeAreaView style={commonStyles.centerContent}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </SafeAreaView>
     );
   }
 
   if (!loading && posts.length === 0) {
     return (
-      <SafeAreaView style={styles.center}>
+      <SafeAreaView style={commonStyles.centerContent}>
         <Text style={styles.emptyText}>
           no posts yet. join some loops or add a post!
         </Text>
@@ -161,7 +155,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={commonStyles.container}>
       <FlatList
         data={posts}
         keyExtractor={item => item.id}
@@ -174,19 +168,21 @@ export default function HomeScreen() {
             onPress={() =>
               navigation.navigate('PostDetail', {
                 loopId: item.loopId,
-                postId: item.id
+                postId: item.id,
               })
             }
           >
             <Text style={styles.loopLabel}>{item.loopId}</Text>
             <Text style={styles.content}>{item.content}</Text>
-            <TouchableOpacity
-              onPress={() => toggleVote(item.loopId, item.id)}
-            >
+            <TouchableOpacity onPress={() => toggleVote(item.loopId, item.id)}>
               <Text
                 style={[
                   styles.meta,
-                  { color: localVotes[item.id] ? '#ff6b6b' : '#888' }
+                  {
+                    color: localVotes[item.id]
+                      ? colors.accent
+                      : colors.textTertiary,
+                  },
                 ]}
               >
                 ❤️ {item.karma}
@@ -200,42 +196,32 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000'
-  },
-  center: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 16
-  },
   list: {
-    padding: 16
+    padding: spacing.md,
   },
   emptyText: {
-    color: '#888',
-    fontSize: 16,
+    color: colors.textTertiary,
+    fontSize: typography.md,
     textAlign: 'center',
-    paddingHorizontal: 20
+    paddingHorizontal: spacing.lg,
   },
   card: {
-    backgroundColor: '#1e1e1e',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+    ...commonStyles.card, // optional if card is reused
   },
   loopLabel: {
-    color: '#00d4ff',
+    color: colors.accent,
     fontWeight: '600',
-    marginBottom: 4
+    marginBottom: spacing.xs,
   },
   content: {
-    color: '#fff',
-    marginBottom: 8
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
   },
   meta: {
-    fontSize: 12
-  }
+    fontSize: typography.sm,
+  },
 });

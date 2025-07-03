@@ -1,15 +1,19 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { commonStyles, typography, colors } from '../screens/styles.js'; // Adjust path if needed
 
 export default function ChatScreen() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>💌 Chat</Text>
+    <View style={commonStyles.container}>
+      <Text style={styles.chatText}>💌 Chat</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex:1, justifyContent:'center', alignItems:'center', backgroundColor:'#000'},
-  text: { color:'#fff', fontSize:24 }
+  chatText: {
+    color: colors.textPrimary,
+    fontSize: typography.xxl,
+    fontWeight: '700', // typography.bold is a string but TS expects direct value
+  },
 });

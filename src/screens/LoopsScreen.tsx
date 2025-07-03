@@ -1,4 +1,3 @@
-// src/screens/LoopsScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -20,6 +19,13 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
 import { Loop } from '../types';
+import {
+  commonStyles,
+  colors,
+  spacing,
+  typography,
+  borderRadius,
+} from '../screens/styles.js'; // Adjust the path if needed
 
 export default function LoopsScreen() {
   const [loops, setLoops] = useState<Loop[]>([]);
@@ -32,7 +38,6 @@ export default function LoopsScreen() {
   useEffect(() => {
     (async () => {
       try {
-        // Fetch all loops
         const loopSnap = await getDocs(collection(db, 'loops'));
         const allLoops = loopSnap.docs.map(d => ({
           id: d.id,
@@ -40,7 +45,6 @@ export default function LoopsScreen() {
         })) as Loop[];
         setLoops(allLoops);
 
-        // Fetch current user's joinedLoops
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
           const data = userSnap.data();
@@ -72,22 +76,22 @@ export default function LoopsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color="#00d4ff" />
+      <SafeAreaView style={commonStyles.centerContent}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </SafeAreaView>
     );
   }
 
   if (!loading && loops.length === 0) {
     return (
-      <SafeAreaView style={styles.center}>
+      <SafeAreaView style={commonStyles.centerContent}>
         <Text style={styles.emptyText}>no loops available</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={commonStyles.container}>
       <FlatList
         data={loops}
         keyExtractor={item => item.id}
@@ -119,60 +123,50 @@ export default function LoopsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  center: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 16,
-  },
   list: {
-    padding: 16,
+    padding: spacing.md,
   },
   emptyText: {
-    color: '#888',
-    fontSize: 16,
+    color: colors.textTertiary,
+    fontSize: typography.md,
+    textAlign: 'center',
   },
   item: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e1e1e',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
   },
   info: {
     flex: 1,
-    paddingRight: 12,
+    paddingRight: spacing.sm,
   },
   name: {
-    color: '#fff',
-    fontSize: 16,
+    color: colors.textPrimary,
+    fontSize: typography.md,
     fontWeight: '600',
   },
   desc: {
-    color: '#aaa',
-    fontSize: 12,
-    marginTop: 4,
+    color: colors.textSecondary,
+    fontSize: typography.sm,
+    marginTop: spacing.xs,
   },
   btn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
   },
   join: {
-    backgroundColor: '#10b981',
+    backgroundColor: colors.success,
   },
   leave: {
-    backgroundColor: '#ef4444',
+    backgroundColor: colors.error,
   },
   btnText: {
-    color: '#fff',
+    color: colors.white,
     fontWeight: '600',
   },
 });

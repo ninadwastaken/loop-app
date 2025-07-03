@@ -9,6 +9,13 @@ import {
 } from 'react-native';
 import { signup } from '../utils/auth';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import {
+  colors,
+  spacing,
+  typography,
+  borderRadius,
+  commonStyles,
+} from '../screens/styles'; // Adjust path if needed
 
 type AuthStackParamList = {
   Login: undefined;
@@ -29,7 +36,6 @@ export default function SignupScreen({ navigation }: Props) {
     setError('');
     try {
       await signup(email.trim(), password, username);
-      // on success, auth state listener in App.tsx will switch you to MainTabs
     } catch (err: any) {
       setError(err.message || 'signup failed');
     } finally {
@@ -44,7 +50,7 @@ export default function SignupScreen({ navigation }: Props) {
       <TextInput
         style={styles.input}
         placeholder="university email"
-        placeholderTextColor="#888"
+        placeholderTextColor={colors.inputPlaceholder}
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
@@ -53,14 +59,14 @@ export default function SignupScreen({ navigation }: Props) {
       <TextInput
         style={styles.input}
         placeholder="username"
-        placeholderTextColor="#888"
+        placeholderTextColor={colors.inputPlaceholder}
         value={username}
         onChangeText={setUsername}
       />
       <TextInput
         style={styles.input}
         placeholder="password"
-        placeholderTextColor="#888"
+        placeholderTextColor={colors.inputPlaceholder}
         secureTextEntry
         value={password}
         onChangeText={setPassword}
@@ -74,7 +80,7 @@ export default function SignupScreen({ navigation }: Props) {
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.white} />
         ) : (
           <Text style={styles.buttonText}>sign up</Text>
         )}
@@ -93,48 +99,52 @@ export default function SignupScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
     justifyContent: 'center',
-    padding: 24,
+    padding: spacing.lg,
   },
   title: {
-    fontSize: 28,
+    fontSize: typography.xxxl,
     fontWeight: '700',
-    color: '#fff',
-    marginBottom: 24,
+    color: colors.textPrimary,
+    marginBottom: spacing.lg,
     textAlign: 'center',
   },
   input: {
-    backgroundColor: '#1f2937',
-    color: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
+    backgroundColor: colors.inputBackground,
+    color: colors.inputText,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.inputBorder,
+    fontSize: typography.md,
   },
   error: {
-    color: '#f87171',
-    marginBottom: 12,
+    color: colors.error,
+    marginBottom: spacing.md,
     textAlign: 'center',
+    fontSize: typography.sm,
   },
   button: {
-    backgroundColor: '#0ea5e9',
-    padding: 14,
-    borderRadius: 8,
+    backgroundColor: colors.accent,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   buttonText: {
-    color: '#fff',
+    color: colors.white,
     fontWeight: '600',
+    fontSize: typography.md,
   },
   footerText: {
-    color: '#888',
+    color: colors.textMuted,
     textAlign: 'center',
+    fontSize: typography.sm,
   },
   link: {
-    color: '#0ea5e9',
+    color: colors.accent,
     fontWeight: '600',
   },
 });
