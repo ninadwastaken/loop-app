@@ -25,7 +25,7 @@ import {
   spacing,
   typography,
   borderRadius,
-} from '../screens/styles'; // Adjust the path if needed
+} from '../utils/styles'; // Adjust the path if needed
 
 export default function NewPostScreen() {
   const [loops, setLoops] = useState<Loop[]>([]);

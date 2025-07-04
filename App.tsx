@@ -42,7 +42,7 @@ const MainStack = createNativeStackNavigator<MainStackParamList>();
 // Bottom‐tabs navigator
 function TabsNavigator() {
   return (
-    <MainTabs.Navigator screenOptions={{ headerShown: false }}>
+    <MainTabs.Navigator id={undefined} screenOptions={{ headerShown: false }}>
       <MainTabs.Screen name="Home" component={HomeScreen} />
       <MainTabs.Screen name="Loops" component={LoopsScreen} />
       <MainTabs.Screen name="NewPost" component={NewPostScreen} />
@@ -54,7 +54,7 @@ function TabsNavigator() {
 // Root stack that wraps tabs + detail screens
 function MainApp() {
   return (
-    <MainStack.Navigator screenOptions={{ headerShown: false }}>
+    <MainStack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
       <MainStack.Screen name="Tabs" component={TabsNavigator} />
       <MainStack.Screen
         name="PostDetail"
@@ -109,11 +109,12 @@ export default function App() {
         <MainApp />
       ) : (
         <AuthStack.Navigator
-          initialRouteName="Login"
+          id={undefined}
+          initialRouteName="Signup"
           screenOptions={{ headerShown: false }}
         >
-          <AuthStack.Screen name="Login" component={LoginScreen} />
           <AuthStack.Screen name="Signup" component={SignupScreen} />
+          <AuthStack.Screen name="Login" component={LoginScreen} />
         </AuthStack.Navigator>
       )}
     </NavigationContainer>

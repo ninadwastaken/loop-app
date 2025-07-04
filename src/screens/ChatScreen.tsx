@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { commonStyles, typography, colors } from '../screens/styles.js'; // Adjust path if needed
+import { commonStyles, typography, colors } from '../utils/styles.js'; // Adjust path if needed
 
 export default function ChatScreen() {
   return (

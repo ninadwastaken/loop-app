@@ -31,7 +31,7 @@ import {
   typography,
   borderRadius,
   commonStyles,
-} from '../screens/styles'; // Adjust path as needed
+} from '../utils/styles'; // Adjust path as needed
 
 interface ThreadedReply {
   id: string;

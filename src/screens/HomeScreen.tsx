@@ -28,7 +28,7 @@ import {
   typography,
   spacing,
   borderRadius,
-} from '../screens/styles.js'; // adjust path as necessary
+} from '../utils/styles.js'; // adjust path as necessary
 
 interface Post {
   id: string;
