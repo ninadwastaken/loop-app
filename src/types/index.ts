@@ -16,4 +16,5 @@ export interface Loop {
   description: string;
   membersCount: number;
   inviteOnly: boolean;
+  tags: string[];
 }
