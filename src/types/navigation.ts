@@ -33,6 +33,7 @@ export type MainTabParamList = {
 export type MainStackParamList = {
   Tabs:       undefined                               // entrypoint to MainTabParamList
   PostDetail: { loopId: string; postId: string }      // thread view
+  ChatDetail: { chatId: string; otherUserId: string } // chat view
 }
 
 /**

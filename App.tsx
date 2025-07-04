@@ -15,6 +15,7 @@ import LoopsScreen      from './src/screens/LoopsScreen';
 import NewPostScreen    from './src/screens/NewPostScreen';
 import ChatScreen       from './src/screens/ChatScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
+import ChatDetailScreen from './src/screens/ChatDetailScreen'
 
 import {
   AuthStackParamList,
@@ -48,6 +49,12 @@ function MainApp() {
         name="PostDetail" 
         component={PostDetailScreen} 
         options={{ headerShown: true, title: 'Post' }} 
+      />
+
+      <MainStack.Screen
+        name="ChatDetail"
+        component={ChatDetailScreen}
+        options={{ headerShown: true, title: 'Messages' }}
       />
     </MainStack.Navigator>
   );
