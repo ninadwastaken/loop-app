@@ -25,7 +25,7 @@ import {
   spacing,
   typography,
   borderRadius,
-} from '../utils/styles.js'; // Adjust the path if needed
+} from '../utils/styles'; // Adjust the path if needed
 
 export default function LoopsScreen() {
   const [loops, setLoops] = useState<Loop[]>([]);

@@ -1,67 +1,87 @@
-import { StyleSheet } from 'react-native';
+// src/utils/styles.ts
+import { StyleSheet } from 'react-native'
 
-// Enhanced Purple/Dark Color palette
+/**
+ * A comprehensive color palette for the app.
+ * Using `as const` ensures each value is typed as its literal,
+ * which helps downstream consumers (e.g. fontWeight, shadows).
+ */
 export const colors = {
   // Primary purple theme
   primary: '#8B5CF6',
   primaryLight: '#A78BFA',
   primaryDark: '#7C3AED',
-  
-  // Background colors
+
+  // Background layers
   background: '#1a0f2e',
   backgroundSecondary: '#0f0a1a',
   backgroundTertiary: '#2d1b4e',
-  
-  // Surface colors
+
+  // Surfaces (cards, modals, etc.)
   surface: '#2d1b34',
   surfaceLight: '#3d2944',
   surfaceDark: '#1d1124',
-  
-  // Text colors
+
+  // Text variants
   textPrimary: '#FFFFFF',
   textSecondary: '#E2E8F0',
   textTertiary: '#94A3B8',
   textMuted: '#64748B',
-  
-  // Input colors
+
+  // Input-related colors
   inputBackground: '#2d1b34',
   inputBackgroundFocused: '#3d2944',
   inputBorder: '#4A5568',
   inputBorderFocused: '#8B5CF6',
   inputPlaceholder: '#94A3B8',
   inputText: '#FFFFFF',
-  
-  // Button colors
+
+  // Button text colors
   buttonText: '#FFFFFF',
   buttonTextSecondary: '#8B5CF6',
-  
-  // Status colors
+
+  // Status-indicating colors
   success: '#10B981',
   warning: '#F59E0B',
   error: '#EF4444',
   info: '#3B82F6',
-  
-  // Accent colors
+
+  // Accent (pink) theme
   accent: '#EC4899',
   accentLight: '#F472B6',
-  
-  // Utility colors
+
+  // Utility
   white: '#FFFFFF',
   black: '#000000',
   transparent: 'transparent',
-  
-  // Overlay colors
+
+  // Overlay backgrounds (modals, toasts)
   overlay: 'rgba(0, 0, 0, 0.5)',
   overlayLight: 'rgba(0, 0, 0, 0.3)',
   overlayDark: 'rgba(0, 0, 0, 0.7)',
-  
+
   // Shadow colors
   shadow: 'rgba(139, 92, 246, 0.25)',
   shadowDark: 'rgba(0, 0, 0, 0.3)',
-};
+} as const  // lock literals
 
-// Typography
+/**
+ * Exported gradient color array for use in <LinearGradient> or similar.
+ * NOTE: Not part of StyleSheet.create—it's just a standalone array.
+ */
+export const gradientColors = [
+  colors.background,
+  colors.backgroundSecondary,
+  colors.backgroundTertiary,
+] as const  // each entry is a literal string
+
+/**
+ * Typography sizes + weights.
+ * - Font sizes are numbers.
+ * - Font weights are string literals matching React Native’s allowed values.
+ */
 export const typography = {
+  // Font sizes
   xs: 12,
   sm: 14,
   md: 16,
@@ -70,14 +90,18 @@ export const typography = {
   xxl: 24,
   xxxl: 28,
   huge: 32,
-  regular: '400',
-  medium: '500',
-  semibold: '600',
-  bold: '700',
-  extraBold: '800',
-};
 
-// Spacing
+  // Font weights (string literals)
+  regular: '400',
+  medium:  '500',
+  semibold:'600',
+  bold:    '700',
+  extraBold:'800',
+} as const
+
+/**
+ * Standardized spacing scale for margins, padding, etc.
+ */
 export const spacing = {
   xs: 4,
   sm: 8,
@@ -87,9 +111,11 @@ export const spacing = {
   xxl: 48,
   xxxl: 64,
   huge: 80,
-};
+} as const
 
-// Border radius
+/**
+ * Standardized border-radius sizes.
+ */
 export const borderRadius = {
   xs: 2,
   sm: 4,
@@ -99,9 +125,12 @@ export const borderRadius = {
   xxl: 20,
   xxxl: 24,
   full: 999,
-};
+} as const
 
-// Shadow styles
+/**
+ * Predefined shadow styles.
+ * Use shadows.sm / md / lg / xl in your component styles.
+ */
 export const shadows = {
   sm: {
     shadowColor: colors.shadow,
@@ -131,32 +160,40 @@ export const shadows = {
     shadowRadius: 20,
     elevation: 12,
   },
-};
+} as const
 
-// Common styles with enhanced purple/dark theme
+/**
+ * Common reusable styles using constants above.
+ * Only valid View/Text/Image style props are allowed here.
+ */
 export const commonStyles = StyleSheet.create({
+  // Safe area wrapper
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  
+
+  // Full-screen container
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  
+
+  // Generic form padding
   formContainer: {
     flex: 1,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
   },
-  
+
+  // Header (title + subtitle)
   headerContainer: {
     alignItems: 'center',
     marginBottom: spacing.xxl,
     marginTop: spacing.xl,
   },
-  
+
+  // App title text
   appTitle: {
     fontSize: typography.huge,
     fontWeight: typography.extraBold,
@@ -165,7 +202,8 @@ export const commonStyles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.5,
   },
-  
+
+  // App subtitle text
   appSubtitle: {
     fontSize: typography.md,
     color: colors.textTertiary,
@@ -173,12 +211,8 @@ export const commonStyles = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: spacing.md,
   },
-  
-  // Enhanced input styles
-  inputContainer: {
-    marginBottom: spacing.lg,
-  },
-  
+
+  // Input label above text inputs
   inputLabel: {
     fontSize: typography.sm,
     color: colors.textSecondary,
@@ -186,7 +220,8 @@ export const commonStyles = StyleSheet.create({
     fontWeight: typography.medium,
     letterSpacing: 0.2,
   },
-  
+
+  // Base input style
   input: {
     backgroundColor: colors.inputBackground,
     padding: spacing.md,
@@ -198,19 +233,21 @@ export const commonStyles = StyleSheet.create({
     minHeight: 50,
     ...shadows.sm,
   },
-  
+
+  // Focused input overrides
   inputFocused: {
     borderColor: colors.inputBorderFocused,
     backgroundColor: colors.inputBackgroundFocused,
     ...shadows.md,
   },
-  
+
+  // Input error state
   inputError: {
     borderColor: colors.error,
     borderWidth: 2,
   },
-  
-  // Enhanced button styles
+
+  // Primary button
   buttonPrimary: {
     backgroundColor: colors.primary,
     padding: spacing.md,
@@ -221,12 +258,14 @@ export const commonStyles = StyleSheet.create({
     minHeight: 50,
     ...shadows.md,
   },
-  
+
+  // Disabled primary button
   buttonPrimaryDisabled: {
     backgroundColor: colors.textMuted,
     ...shadows.sm,
   },
-  
+
+  // Secondary button (outline style)
   buttonSecondary: {
     backgroundColor: colors.surface,
     padding: spacing.md,
@@ -239,22 +278,24 @@ export const commonStyles = StyleSheet.create({
     borderColor: colors.primary,
     ...shadows.sm,
   },
-  
+
+  // Primary button text
   buttonText: {
     color: colors.buttonText,
     fontSize: typography.md,
     fontWeight: typography.semibold,
     letterSpacing: 0.3,
   },
-  
+
+  // Secondary button text
   buttonTextSecondary: {
     color: colors.primary,
     fontSize: typography.md,
     fontWeight: typography.semibold,
     letterSpacing: 0.3,
   },
-  
-  // Enhanced text styles
+
+  // Error message text
   errorText: {
     color: colors.error,
     fontSize: typography.sm,
@@ -262,87 +303,91 @@ export const commonStyles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: typography.medium,
   },
-  
+
+  // Footer link text
   footerText: {
     fontSize: typography.sm,
     color: colors.textTertiary,
     textAlign: 'center',
     lineHeight: 20,
   },
-  
+
+  // Link text style
   linkText: {
     color: colors.primary,
     fontWeight: typography.semibold,
   },
-  
-  // Additional enhanced styles
+
+  // Card container style
   card: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
     ...shadows.md,
   },
-  
+
+  // Card header text
   cardHeader: {
     fontSize: typography.lg,
     fontWeight: typography.bold,
     color: colors.textPrimary,
     marginBottom: spacing.md,
   },
-  
+
+  // Divider line
   divider: {
     height: 1,
     backgroundColor: colors.inputBorder,
     marginVertical: spacing.md,
   },
-  
-  // Loading and state styles
+
+  // Loading screen container
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background,
   },
-  
+
+  // Loading text below spinner
   loadingText: {
     color: colors.textSecondary,
     fontSize: typography.md,
     marginTop: spacing.md,
   },
-  
-  // Enhanced layout styles
+
+  // Center content both vertically and horizontally
   centerContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
+
+  // Row layout with space-between
   spaceBetween: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  
-  // Status bar style
+
+  // Status bar background
   statusBar: {
     backgroundColor: colors.background,
   },
-  
-  // Gradient background helper (for use with LinearGradient)
-  gradientColors: [colors.background, colors.backgroundSecondary, colors.backgroundTertiary],
-  
-  // Focus ring for accessibility
+
+  // Focus ring for accessibility outlines
   focusRing: {
     borderWidth: 2,
     borderColor: colors.primary,
   },
-  
-  // Subtle animation helpers
+
+  // Fade-in animation helper
   fadeIn: {
     opacity: 1,
   },
-  
+
+  // Fade-out animation helper
   fadeOut: {
     opacity: 0.5,
   },
-});
+})

@@ -1,88 +1,80 @@
 // App.tsx
 import React, { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import {
-  createNativeStackNavigator,
-  NativeStackScreenProps
-} from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { NavigationContainer }         from '@react-navigation/native';
+import { createNativeStackNavigator }  from '@react-navigation/native-stack';
+import { createBottomTabNavigator }    from '@react-navigation/bottom-tabs';
+import { onAuthStateChanged, User }    from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { auth, db }                    from './firebase';
 
-import LoginScreen from './src/screens/LoginScreen';
-import SignupScreen from './src/screens/SignupScreen';
-import HomeScreen from './src/screens/HomeScreen';
-import LoopsScreen from './src/screens/LoopsScreen';
-import ChatScreen from './src/screens/ChatScreen';
-import NewPostScreen from './src/screens/NewPostScreen';
+import LoginScreen      from './src/screens/LoginScreen';
+import SignupScreen     from './src/screens/SignupScreen';
+import InterestsScreen  from './src/screens/InterestsScreen';
+import HomeScreen       from './src/screens/HomeScreen';
+import LoopsScreen      from './src/screens/LoopsScreen';
+import NewPostScreen    from './src/screens/NewPostScreen';
+import ChatScreen       from './src/screens/ChatScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
 
-// --- Navigator param types ---
-type AuthStackParamList = {
-  Login: undefined;
-  Signup: undefined;
-};
-type MainTabParamList = {
-  Home: undefined;
-  Loops: undefined;
-  NewPost: undefined;
-  Chat: undefined;
-};
-type MainStackParamList = {
-  Tabs: undefined;
-  PostDetail: { loopId: string; postId: string };
-};
+import {
+  AuthStackParamList,
+  MainTabParamList,
+  MainStackParamList
+} from './src/types/navigation';
 
-// --- Create navigators ---
+// 1) Navigator instances
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
-const MainTabs = createBottomTabNavigator<MainTabParamList>();
+const MainTabs  = createBottomTabNavigator<MainTabParamList>();
 const MainStack = createNativeStackNavigator<MainStackParamList>();
 
-// Bottom‐tabs navigator
+// 2) Bottom‐tabs definition
 function TabsNavigator() {
   return (
     <MainTabs.Navigator id={undefined} screenOptions={{ headerShown: false }}>
-      <MainTabs.Screen name="Home" component={HomeScreen} />
-      <MainTabs.Screen name="Loops" component={LoopsScreen} />
-      <MainTabs.Screen name="NewPost" component={NewPostScreen} />
-      <MainTabs.Screen name="Chat" component={ChatScreen} />
+      <MainTabs.Screen name="Home"    component={HomeScreen}/>
+      <MainTabs.Screen name="Loops"   component={LoopsScreen}/>
+      <MainTabs.Screen name="NewPost" component={NewPostScreen}/>
+      <MainTabs.Screen name="Chat"    component={ChatScreen}/>
     </MainTabs.Navigator>
   );
 }
 
-// Root stack that wraps tabs + detail screens
+// 3) Root stack wrapping the tabs + PostDetail modal
 function MainApp() {
   return (
     <MainStack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
-      <MainStack.Screen name="Tabs" component={TabsNavigator} />
-      <MainStack.Screen
-        name="PostDetail"
-        component={PostDetailScreen}
-        options={{ headerShown: true, title: 'Post' }}
+      <MainStack.Screen name="Tabs"      component={TabsNavigator}/>
+      <MainStack.Screen 
+        name="PostDetail" 
+        component={PostDetailScreen} 
+        options={{ headerShown: true, title: 'Post' }} 
       />
     </MainStack.Navigator>
   );
 }
 
-// App entrypoint
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  // signed-in user
+  const [user, setUser]         = useState<User | null>(null);
+  // user profile from Firestore
+  const [profile, setProfile]   = useState<{ interests?: string[] } | null>(null);
+  // still initializing auth & profile
   const [initializing, setInitializing] = useState(true);
 
+  // A) Listen for auth changes & auto-create user doc if needed
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+    const unsubAuth = onAuthStateChanged(auth, async (u) => {
       setUser(u);
 
-      // On first login, auto-create Firestore profile if missing
       if (u) {
         const userRef = doc(db, 'users', u.uid);
-        const snap = await getDoc(userRef);
+        const snap    = await getDoc(userRef);
         if (!snap.exists()) {
+          // first sign-up: initialize profile
           await setDoc(userRef, {
             email:       u.email || '',
             username:    '',
-            interests:   [],
+            interests:   [],     // empty → will drive the Interests screen
             joinedLoops: [],
             karma:       0,
             streak:      0,
@@ -95,27 +87,49 @@ export default function App() {
         setInitializing(false);
       }
     });
-    return unsubscribe;
+    return unsubAuth;
   }, [initializing]);
 
+  // B) Listen in real-time to the Firestore user doc
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+    const userRef     = doc(db, 'users', user.uid);
+    const unsubSnap   = onSnapshot(userRef, (snap) => {
+      setProfile(snap.exists() ? (snap.data() as any) : null);
+    });
+    return unsubSnap;
+  }, [user]);
+
+  // C) While we’re booting up…
   if (initializing) {
-    // You could return a splash/loading screen here
-    return null;
+    return null; // or a splash/loading indicator
   }
 
+  // D) Determine which navigator to show
   return (
     <NavigationContainer>
-      {user ? (
-        <MainApp />
-      ) : (
-        <AuthStack.Navigator
-          id={undefined}
-          initialRouteName="Signup"
-          screenOptions={{ headerShown: false }}
-        >
-          <AuthStack.Screen name="Signup" component={SignupScreen} />
-          <AuthStack.Screen name="Login" component={LoginScreen} />
+      {/*
+         1) Not signed in → Signup / Login / Interests flow
+      */}
+      {!user ? (
+        <AuthStack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
+          <AuthStack.Screen name="Signup"    component={SignupScreen}/>
+          <AuthStack.Screen name="Login"     component={LoginScreen}/>
+          <AuthStack.Screen name="Interests" component={InterestsScreen}/>
         </AuthStack.Navigator>
+
+      ) : /**  2) Signed in but no interests yet → force Interests screen only */
+      !profile?.interests?.length ? (
+        <AuthStack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
+          <AuthStack.Screen name="Interests" component={InterestsScreen}/>
+        </AuthStack.Navigator>
+
+      ) : /**  3) User is onboarded → MainApp (Tabs + PostDetail) */
+      (
+        <MainApp/>
       )}
     </NavigationContainer>
   );

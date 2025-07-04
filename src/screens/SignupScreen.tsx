@@ -1,43 +1,51 @@
+// src/screens/SignupScreen.tsx
+
 import React, { useState } from 'react';
 import {
+  SafeAreaView,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
   View,
   Text,
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
-  SafeAreaView,
-  StatusBar,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
 } from 'react-native';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../firebase';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-// Try to import styles, fallback if missing
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '../../firebase';
+
+// ← Use your shared navigator props so TS knows "Interests" is valid
+import type { SignupScreenProps } from '../types/navigation';
+
+// Dynamic token-based styles (falls back if import fails)
 let commonStyles: any = {};
 let colors: any = {};
 let typography: any = {};
 let spacing: any = {};
 
 try {
-  const stylesImport = require('../utils/styles');
-  commonStyles = stylesImport.commonStyles || {};
-  colors = stylesImport.colors || {};
-  typography = stylesImport.typography || {};
-  spacing = stylesImport.spacing || {};
-} catch (error) {
-  console.warn('Could not import styles, using defaults');
+  // try importing your theme file
+  const s = require('../utils/styles');
+  commonStyles = s.commonStyles;
+  colors      = s.colors;
+  typography  = s.typography;
+  spacing     = s.spacing;
+} catch {
+  console.warn('styles import failed, using defaults');
   colors = {
-    primary: '#007AFF',
-    background: '#000000',
+    primary: '#8B5CF6',
+    background: '#1A0F2E',
     buttonText: '#FFFFFF',
-    inputPlaceholder: '#999999',
+    inputPlaceholder: '#94A3B8',
+    error: '#EF4444',
   };
   typography = {
     sm: 14,
+    md: 16,
     semibold: '600' as const,
   };
   spacing = {
@@ -47,23 +55,24 @@ try {
   };
 }
 
-type AuthStackParamList = {
-  Login: undefined;
-  Signup: undefined;
-};
-
-type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
-
-export default function SignupScreen({ navigation }: Props) {
-  const [email, setEmail] = useState('');
-  const [campus, setCampus] = useState('');
+export default function SignupScreen({ navigation }: SignupScreenProps) {
+  // Form state
+  const [email,    setEmail]    = useState('');
+  const [campus,   setCampus]   = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
 
+  // Called when user taps "Verify and Continue"
   const handleSignup = async () => {
-    if (!email.trim() || !campus.trim() || !username.trim() || !password.trim()) {
+    // basic validation
+    if (
+      !email.trim() ||
+      !campus.trim() ||
+      !username.trim() ||
+      !password.trim()
+    ) {
       setError('Please fill in all fields');
       return;
     }
@@ -72,28 +81,42 @@ export default function SignupScreen({ navigation }: Props) {
     setError('');
 
     try {
-      await createUserWithEmailAndPassword(auth, email.trim(), password);
-      // auth state listener in App.tsx will switch you into MainTabs
+      // 1) create auth user
+      const cred = await createUserWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
+      const uid = cred.user.uid;
+
+      // 2) immediately seed Firestore profile
+      await setDoc(doc(db, 'users', uid), {
+        email:       email.trim(),
+        campus:      campus.trim(),
+        username:    username.trim(),
+        interests:   [],     // will fill in next screen
+        joinedLoops: [],     // will auto-join next
+        karma:       0,
+        streak:      0,
+        createdAt:   serverTimestamp(),
+      });
+
+      // 3) navigate into Interests flow
+      navigation.replace('Interests');
     } catch (err: any) {
-      console.log('Signup error code:', err.code, err.message);
-      let errorMessage = 'Signup failed. Please try again';
-
-      switch (err.code) {
-        case 'auth/email-already-in-use':
-          errorMessage = 'This email is already registered';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email format';
-          break;
-        case 'auth/weak-password':
-          errorMessage = 'Password should be at least 6 characters';
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = 'Too many attempts. Please try again later';
-          break;
+      console.log('Signup error:', err.code, err.message);
+      // map Firebase errors to friendly messages
+      let msg = 'Signup failed. Please try again';
+      if (err.code === 'auth/email-already-in-use') {
+        msg = 'Email already registered';
+      } else if (err.code === 'auth/invalid-email') {
+        msg = 'Invalid email address';
+      } else if (err.code === 'auth/weak-password') {
+        msg = 'Password must be ≥ 6 characters';
+      } else if (err.code === 'auth/too-many-requests') {
+        msg = 'Too many attempts. Try again later';
       }
-
-      setError(errorMessage);
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -101,12 +124,17 @@ export default function SignupScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={commonStyles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={colors.background}
+      />
+
       <KeyboardAvoidingView
         style={commonStyles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={commonStyles.formContainer}>
+
           {/* Header */}
           <View style={commonStyles.headerContainer}>
             <Text style={commonStyles.appTitle}>Welcome to Loop!</Text>
@@ -115,94 +143,80 @@ export default function SignupScreen({ navigation }: Props) {
             </Text>
           </View>
 
-          {/* Form */}
+          {/* Form Fields */}
           <View style={styles.formSection}>
-            {/* University Email Input */}
+
+            {/* University Email */}
             <View style={commonStyles.inputContainer}>
               <Text style={commonStyles.inputLabel}>University Email</Text>
               <TextInput
-                style={[
-                  commonStyles.input,
-                  error && commonStyles.inputError,
-                ]}
-                placeholder="Enter your university email"
+                style={[commonStyles.input, error && commonStyles.inputError]}
+                placeholder="you@school.edu"
                 placeholderTextColor={colors.inputPlaceholder}
-                autoCapitalize="none"
                 keyboardType="email-address"
-                autoComplete="email"
+                autoCapitalize="none"
                 value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
+                onChangeText={t => {
+                  setEmail(t);
                   if (error) setError('');
                 }}
               />
             </View>
 
-            {/* Campus Input Field (editable) */}
+            {/* Campus */}
             <View style={commonStyles.inputContainer}>
               <Text style={commonStyles.inputLabel}>Campus</Text>
               <TextInput
-                style={[
-                  commonStyles.input,
-                  error && commonStyles.inputError,
-                ]}
-                placeholder="Enter your campus"
+                style={[commonStyles.input, error && commonStyles.inputError]}
+                placeholder="e.g. NYU Tandon"
                 placeholderTextColor={colors.inputPlaceholder}
                 autoCapitalize="words"
                 value={campus}
-                onChangeText={(text) => {
-                  setCampus(text);
+                onChangeText={t => {
+                  setCampus(t);
                   if (error) setError('');
                 }}
               />
             </View>
 
-            {/* Username Input */}
+            {/* Username */}
             <View style={commonStyles.inputContainer}>
               <Text style={commonStyles.inputLabel}>Username</Text>
               <TextInput
-                style={[
-                  commonStyles.input,
-                  error && commonStyles.inputError,
-                ]}
-                placeholder="Enter your username"
+                style={[commonStyles.input, error && commonStyles.inputError]}
+                placeholder="pick a username"
                 placeholderTextColor={colors.inputPlaceholder}
                 autoCapitalize="none"
-                autoComplete="username"
                 value={username}
-                onChangeText={(text) => {
-                  setUsername(text);
+                onChangeText={t => {
+                  setUsername(t);
                   if (error) setError('');
                 }}
               />
             </View>
 
-            {/* Password Input */}
+            {/* Password */}
             <View style={commonStyles.inputContainer}>
               <Text style={commonStyles.inputLabel}>Password</Text>
               <TextInput
-                style={[
-                  commonStyles.input,
-                  error && commonStyles.inputError,
-                ]}
-                placeholder="Enter your password"
+                style={[commonStyles.input, error && commonStyles.inputError]}
+                placeholder="minimum 6 chars"
                 placeholderTextColor={colors.inputPlaceholder}
                 secureTextEntry
-                autoComplete="password"
                 value={password}
-                onChangeText={(text) => {
-                  setPassword(text);
+                onChangeText={t => {
+                  setPassword(t);
                   if (error) setError('');
                 }}
               />
             </View>
 
-            {/* Error Message */}
+            {/* Show error if present */}
             {error ? (
               <Text style={commonStyles.errorText}>{error}</Text>
             ) : null}
 
-            {/* Signup Button */}
+            {/* Signup button */}
             <TouchableOpacity
               style={[
                 commonStyles.buttonPrimary,
@@ -213,13 +227,18 @@ export default function SignupScreen({ navigation }: Props) {
               activeOpacity={0.8}
             >
               {loading ? (
-                <ActivityIndicator color={colors.buttonText} size="small" />
+                <ActivityIndicator
+                  color={colors.buttonText}
+                  size="small"
+                />
               ) : (
-                <Text style={commonStyles.buttonText}>Verify and Continue</Text>
+                <Text style={commonStyles.buttonText}>
+                  Verify and Continue
+                </Text>
               )}
             </TouchableOpacity>
 
-            {/* Footer */}
+            {/* Footer: navigate to Login */}
             <View style={styles.footerSection}>
               <TouchableOpacity
                 onPress={() => navigation.navigate('Login')}
@@ -227,11 +246,12 @@ export default function SignupScreen({ navigation }: Props) {
               >
                 <Text style={commonStyles.footerText}>
                   Already have an account?{' '}
-                  <Text style={commonStyles.linkText}>Login</Text>
+                  <Text style={commonStyles.linkText}>Log in</Text>
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
+
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
