@@ -1,15 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// src/screens/PostDetailScreen.tsx
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useLayoutEffect,
+} from 'react'
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   ActivityIndicator,
   TextInput,
   TouchableOpacity,
   StyleSheet,
   Alert,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   doc,
   getDoc,
@@ -23,147 +29,217 @@ import {
   deleteDoc,
   updateDoc,
   increment,
-} from 'firebase/firestore';
-import { db, auth } from '../../firebase';
+  Firestore,
+} from 'firebase/firestore'
+import { db, auth } from '../../firebase'
 import {
   colors,
   spacing,
   typography,
   borderRadius,
   commonStyles,
-} from '../utils/styles'; // Adjust path as needed
+} from '../utils/styles'
 
+// ──────────────────────────
+// Types
+// ──────────────────────────
 interface ThreadedReply {
-  id: string;
-  replierId: string;
-  content: string;
-  anon: boolean;
-  karma: number;
-  createdAt: any;
-  parentId: string | null;
-  children: ThreadedReply[];
+  id: string
+  replierId: string
+  username: string
+  content: string
+  anon: boolean
+  karma: number
+  createdAt: any
+  parentId: string | null
+  children: ThreadedReply[]
 }
 
 interface PostData {
-  content: string;
-  posterId: string;
-  anon: boolean;
-  karma: number;
-  createdAt: any;
+  content: string
+  posterId: string
+  posterName: string
+  anon: boolean
+  karma: number
+  createdAt: any
+  loopId: string
+  loopName: string
 }
 
-// build nested tree
+// ──────────────────────────
+// Helpers
+// ──────────────────────────
+
+// Build nested replies from flat list
 function buildTree(list: ThreadedReply[]): ThreadedReply[] {
-  const map = new Map<string, ThreadedReply>();
-  const roots: ThreadedReply[] = [];
+  const map = new Map<string, ThreadedReply>()
+  const roots: ThreadedReply[] = []
   list.forEach(r => {
-    r.children = [];
-    map.set(r.id, r);
-  });
+    r.children = []
+    map.set(r.id, r)
+  })
   list.forEach(r => {
     if (r.parentId && map.has(r.parentId)) {
-      map.get(r.parentId)!.children.push(r);
-    } else if (r.parentId === null) {
-      roots.push(r);
+      map.get(r.parentId)!.children.push(r)
+    } else {
+      roots.push(r)
     }
-  });
-  return roots;
+  })
+  return roots
 }
 
-// helper to apply a karma delta to a reply in the tree
+// Recursively adjust replies’ karma
 function adjustReplies(
   list: ThreadedReply[],
   targetId: string,
   delta: number
 ): ThreadedReply[] {
   return list.map(r => {
-    const updatedChildren = adjustReplies(r.children, targetId, delta);
+    const children = adjustReplies(r.children, targetId, delta)
     if (r.id === targetId) {
-      return { ...r, karma: r.karma + delta, children: updatedChildren };
-    } else {
-      return { ...r, children: updatedChildren };
+      return { ...r, karma: r.karma + delta, children }
     }
-  });
+    return { ...r, children }
+  })
 }
 
+// Fetch display name / username by UID
+async function fetchUsername(uid: string) {
+  const snap = await getDoc(doc(db, 'users', uid))
+  if (!snap.exists()) return 'unknown'
+  const data = snap.data() as any
+  return data.displayName || data.username || 'unknown'
+}
+
+// Fetch loop name by ID
+async function fetchLoopName(loopId: string) {
+  const snap = await getDoc(doc(db, 'loops', loopId))
+  if (!snap.exists()) return loopId
+  return (snap.data() as any).name || loopId
+}
+
+// ──────────────────────────
+// Component
+// ──────────────────────────
 export default function PostDetailScreen({ route, navigation }: any) {
-  const { loopId, postId } = route.params;
+  const { loopId, postId } = route.params as {
+    loopId: string
+    postId: string
+  }
+  const uid = auth.currentUser!.uid
 
-  const [post, setPost] = useState<PostData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [replies, setReplies] = useState<ThreadedReply[]>([]);
-  const [commentText, setCommentText] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [replyTo, setReplyTo] = useState<{ id: string; content: string } | null>(null);
-  const [localVotes, setLocalVotes] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true)
+  const [post, setPost] = useState<PostData | null>(null)
+  const [tree, setTree] = useState<ThreadedReply[]>([])
+  const [flatListData, setFlatListData] = useState<any[]>([])
+  const [localVotes, setLocalVotes] = useState<Record<string, boolean>>({})
+  const [commentText, setCommentText] = useState('')
+  const [replyTo, setReplyTo] = useState<{ id: string; content: string } | null>(
+    null
+  )
+  const [submitting, setSubmitting] = useState(false)
 
-  const toggleVote = async (parentPath: string, targetId: string) => {
-    const uid = auth.currentUser!.uid;
-    const votesColPath = `${parentPath}/votes`;
-    const voteRef = doc(db, votesColPath, uid);
-    const parentRef = doc(db, parentPath);
-    const hasVoted = !!localVotes[targetId];
-    const delta = hasVoted ? -1 : 1;
+  // Toggle upvote/downvote
+  const toggleVote = async (
+    parentPath: string,
+    targetId: string
+  ) => {
+    // build correct refs
+    const voteRef = doc(
+      db as Firestore,
+      ...parentPath.split('/'),
+      'votes',
+      uid
+    )
+    const parentRef = doc(db as Firestore, ...parentPath.split('/'))
 
-    setLocalVotes(prev => ({ ...prev, [targetId]: !hasVoted }));
+    const hasVoted = !!localVotes[targetId]
+    const delta = hasVoted ? -1 : 1
+
+    // optimistic update
+    setLocalVotes(p => ({ ...p, [targetId]: !hasVoted }))
     if (targetId === postId) {
-      setPost(p => p && { ...p, karma: p.karma + delta });
+      setPost(p =>
+        p ? { ...p, karma: p.karma + delta } : (p as PostData)
+      )
     } else {
-      setReplies(prev => adjustReplies(prev, targetId, delta));
+      setTree(t => adjustReplies(t, targetId, delta))
     }
 
     try {
       if (hasVoted) {
-        await deleteDoc(voteRef);
-        await updateDoc(parentRef, { karma: increment(-1) });
+        await deleteDoc(voteRef)
+        await updateDoc(parentRef, { karma: increment(-1) })
       } else {
-        await setDoc(voteRef, { value: 1 });
-        await updateDoc(parentRef, { karma: increment(1) });
+        await setDoc(voteRef, { value: 1 })
+        await updateDoc(parentRef, { karma: increment(1) })
       }
     } catch (err) {
-      console.warn('Vote error:', err);
-      Alert.alert('Error', 'Could not update vote');
-      setLocalVotes(prev => ({ ...prev, [targetId]: hasVoted }));
+      console.warn('Vote error:', err)
+      Alert.alert('Error', 'Could not update vote.')
+      // rollback
+      setLocalVotes(p => ({ ...p, [targetId]: hasVoted }))
       if (targetId === postId) {
-        setPost(p => p && { ...p, karma: p.karma - delta });
+        setPost(p =>
+          p ? { ...p, karma: p.karma - delta } : (p as PostData)
+        )
       } else {
-        setReplies(prev => adjustReplies(prev, targetId, -delta));
+        setTree(t => adjustReplies(t, targetId, -delta))
       }
     }
-  };
+  }
 
+  // Load post info + replies
   const loadAll = useCallback(async () => {
     try {
-      const postRef = doc(db, 'loops', loopId, 'posts', postId);
-      const postSnap = await getDoc(postRef);
+      // 1) Fetch loop name
+      const loopName = await fetchLoopName(loopId)
+
+      // 2) Fetch post
+      const postRef = doc(db, 'loops', loopId, 'posts', postId)
+      const postSnap = await getDoc(postRef)
       if (!postSnap.exists()) {
-        Alert.alert('Not found', 'This post was deleted');
-        navigation.goBack();
-        return;
+        Alert.alert('Not found', 'This post was deleted')
+        navigation.goBack()
+        return
       }
-      const postData = postSnap.data() as PostData;
-      setPost(postData);
+      const pd = postSnap.data() as any
+      const posterName = await fetchUsername(pd.posterId)
+      const createdAt: Date = pd.createdAt.toDate()
+      // build date-only string
+      const dateStr = createdAt.toLocaleDateString()
+      setPost({
+        content: pd.content,
+        posterId: pd.posterId,
+        posterName,
+        anon: pd.anon,
+        karma: pd.karma,
+        createdAt: pd.createdAt,
+        loopId,
+        loopName,
+      })
 
-      const postVotesSnap = await getDocs(
+      // record your vote on the post
+      const pvSnap = await getDocs(
         collection(db, 'loops', loopId, 'posts', postId, 'votes')
-      );
-      const votedPost = postVotesSnap.docs.some(
-        d => d.id === auth.currentUser!.uid
-      );
-      setLocalVotes(p => ({ ...p, [postId]: votedPost }));
+      )
+      setLocalVotes(p => ({
+        ...p,
+        [postId]: pvSnap.docs.some(d => d.id === uid),
+      }))
 
-      const repliesSnap = await getDocs(
+      // 3) Fetch all replies (flat)
+      const repSnap = await getDocs(
         query(
           collection(db, 'loops', loopId, 'posts', postId, 'replies'),
           orderBy('createdAt', 'asc')
         )
-      );
-
-      const flat: ThreadedReply[] = [];
-      for (const d of repliesSnap.docs) {
-        const data = d.data();
-        const rid = d.id;
-        const replyVotesSnap = await getDocs(
+      )
+      const flat: ThreadedReply[] = []
+      for (let d of repSnap.docs) {
+        const data = d.data() as any
+        const uname = await fetchUsername(data.replierId)
+        const rv = await getDocs(
           collection(
             db,
             'loops',
@@ -171,129 +247,181 @@ export default function PostDetailScreen({ route, navigation }: any) {
             'posts',
             postId,
             'replies',
-            rid,
+            d.id,
             'votes'
           )
-        );
-        const votedReply = replyVotesSnap.docs.some(
-          v => v.id === auth.currentUser!.uid
-        );
-        setLocalVotes(p => ({ ...p, [rid]: votedReply }));
-
+        )
+        setLocalVotes(p => ({
+          ...p,
+          [d.id]: rv.docs.some(v => v.id === uid),
+        }))
         flat.push({
-          id: rid,
+          id: d.id,
           replierId: data.replierId,
+          username: uname,
           content: data.content,
           anon: data.anon,
           karma: data.karma,
           createdAt: data.createdAt,
           parentId: data.parentId ?? null,
           children: [],
-        });
+        })
       }
 
-      setReplies(buildTree(flat));
+      // 4) Build tree & flatList
+      const tree = buildTree(flat)
+      setTree(tree)
+
+      // flatten: [ post, ... replies ]
+      const arr: any[] = []
+      arr.push({ type: 'post', data: { ...pd, posterName, loopName, createdAt: dateStr } })
+
+      function walk(nodes: ThreadedReply[], depth = 0) {
+        nodes.forEach(r => {
+          const date = r.createdAt.toDate().toLocaleDateString()
+          arr.push({ type: 'reply', data: r, depth, date })
+          if (r.children.length) walk(r.children, depth + 1)
+        })
+      }
+      walk(tree)
+      setFlatListData(arr)
     } catch (err) {
-      console.warn('Load detail error:', err);
-      Alert.alert('Error', 'Could not load post/comments');
+      console.warn('Load detail error:', err)
+      Alert.alert('Error', 'Could not load post/comments.')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [loopId, postId, navigation]);
+  }, [loopId, postId, uid, navigation])
 
   useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+    loadAll()
+  }, [loadAll])
 
+  // Post a comment or reply
   const handleComment = async () => {
-    if (!commentText.trim()) return;
-    setSubmitting(true);
+    if (!commentText.trim()) return
+    setSubmitting(true)
     try {
-      await addDoc(collection(db, 'loops', loopId, 'posts', postId, 'replies'), {
-        replierId: auth.currentUser!.uid,
-        content: commentText.trim(),
-        anon: false,
-        karma: 0,
-        createdAt: serverTimestamp(),
-        parentId: replyTo?.id ?? null,
-      });
-      setCommentText('');
-      setReplyTo(null);
-      await loadAll();
+      await addDoc(
+        collection(db, 'loops', loopId, 'posts', postId, 'replies'),
+        {
+          replierId: uid,
+          content: commentText.trim(),
+          anon: false,
+          karma: 0,
+          createdAt: serverTimestamp(),
+          parentId: replyTo?.id ?? null,
+        }
+      )
+      setCommentText('')
+      setReplyTo(null)
+      await loadAll()
     } catch (err) {
-      console.warn('Comment error:', err);
-      Alert.alert('Error', 'Could not post comment');
+      console.warn('Comment error:', err)
+      Alert.alert('Error', 'Could not post comment.')
     } finally {
-      setSubmitting(false);
+      setSubmitting(false)
     }
-  };
+  }
 
-  const renderReply = (reply: ThreadedReply, depth = 0) => (
-    <View key={reply.id} style={{ marginLeft: depth * spacing.md, marginBottom: spacing.sm }}>
-      <View style={styles.replyCard}>
-        <Text style={styles.replyContent}>{reply.content}</Text>
-        <TouchableOpacity
-          onPress={() =>
-            toggleVote(
-              `loops/${loopId}/posts/${postId}/replies/${reply.id}`,
-              reply.id
-            )
-          }
-        >
-          <Text
-            style={{
-              color: localVotes[reply.id] ? colors.accent : colors.textMuted,
-              fontSize: typography.sm,
-              marginTop: spacing.xs,
-            }}
-          >
-            ❤️ {reply.karma}
-          </Text>
-        </TouchableOpacity>
-      </View>
-      <TouchableOpacity
-        onPress={() => setReplyTo({ id: reply.id, content: reply.content })}
-      >
-        <Text style={styles.replyLink}>reply</Text>
-      </TouchableOpacity>
-      {reply.children.map(c => renderReply(c, depth + 1))}
-    </View>
-  );
-
+  // Loading fallback
   if (loading || !post) {
     return (
       <SafeAreaView style={commonStyles.centerContent}>
-        <ActivityIndicator size="large" color={colors.accent} />
+        <ActivityIndicator color={colors.accent} size="large" />
       </SafeAreaView>
-    );
+    )
+  }
+
+  // Render each line
+  const renderItem = ({ item }: { item: any }) => {
+    if (item.type === 'post') {
+      const p: any = item.data
+      return (
+        <View style={styles.postCard}>
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate('UserProfile', { userId: p.posterId })
+            }
+          >
+            <Text style={styles.posterName}>{p.posterName}</Text>
+          </TouchableOpacity>
+          <Text style={styles.loopName}>#{p.loopName}</Text>
+          <Text style={styles.postContent}>{p.content}</Text>
+          <Text style={styles.postMeta}>{p.createdAt}</Text>
+          <TouchableOpacity
+            onPress={() =>
+              toggleVote(`loops/${loopId}/posts/${postId}`, postId)
+            }
+          >
+            <Text
+              style={[
+                styles.voteText,
+                localVotes[postId] && { color: colors.accent },
+              ]}
+            >
+              ❤️ {p.karma}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )
+    }
+
+    // It's a reply
+    const { data: r, depth, date } = item
+    return (
+      <View style={{ marginLeft: depth * spacing.md, marginBottom: spacing.sm }}>
+        <TouchableOpacity
+          onPress={() =>
+            navigation.navigate('UserProfile', { userId: r.replierId })
+          }
+        >
+          <Text style={styles.posterName}>{r.username}</Text>
+        </TouchableOpacity>
+        <View style={styles.replyCard}>
+          <Text style={styles.replyContent}>{r.content}</Text>
+          <Text style={styles.replyMeta}>{date}</Text>
+          <View style={styles.replyActions}>
+            <TouchableOpacity
+              onPress={() =>
+                toggleVote(
+                  `loops/${loopId}/posts/${postId}/replies/${r.id}`,
+                  r.id
+                )
+              }
+            >
+              <Text
+                style={[
+                  styles.voteText,
+                  localVotes[r.id] && { color: colors.accent },
+                ]}
+              >
+                ❤️ {r.karma}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() =>
+                setReplyTo({ id: r.id, content: r.content })
+              }
+            >
+              <Text style={styles.replyLink}>reply</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    )
   }
 
   return (
     <SafeAreaView style={commonStyles.container}>
-      <View style={styles.postCard}>
-        <Text style={styles.postContent}>{post.content}</Text>
-        <TouchableOpacity
-          onPress={() => toggleVote(`loops/${loopId}/posts/${postId}`, postId)}
-        >
-          <Text
-            style={{
-              color: localVotes[postId] ? colors.accent : colors.textMuted,
-              marginTop: spacing.sm,
-            }}
-          >
-            ❤️ {post.karma}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <FlatList
+        data={flatListData}
+        keyExtractor={(_, idx) => String(idx)}
+        renderItem={renderItem}
+        contentContainerStyle={{ paddingBottom: spacing.xxxl }}
+      />
 
-      <Text style={styles.commentsHeader}>Comments</Text>
-      <ScrollView
-        style={styles.list}
-        contentContainerStyle={{ paddingBottom: spacing.huge * 1.5 }}
-      >
-        {replies.map(r => renderReply(r))}
-      </ScrollView>
-
+      {/* “replying to” banner */}
       {replyTo && (
         <View style={styles.replyingBanner}>
           <Text style={styles.replyingText}>
@@ -305,10 +433,13 @@ export default function PostDetailScreen({ route, navigation }: any) {
         </View>
       )}
 
+      {/* Input row */}
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
-          placeholder={replyTo ? 'Reply...' : 'Add a comment...'}
+          placeholder={
+            replyTo ? 'Reply to comment…' : 'Add a comment…'
+          }
           placeholderTextColor={colors.textMuted}
           value={commentText}
           onChangeText={setCommentText}
@@ -318,18 +449,31 @@ export default function PostDetailScreen({ route, navigation }: any) {
           onPress={handleComment}
           disabled={submitting}
         >
-          {submitting ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <Text style={styles.sendText}>➤</Text>
-          )}
+          <Text style={styles.sendText}>
+            {submitting ? '…' : '➤'}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
-  );
+  )
 }
 
+// ──────────────────────────
+// Styles
+// ──────────────────────────
 const styles = StyleSheet.create({
+  posterName: {
+    color: colors.accent,
+    fontWeight: '600',
+    marginLeft: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  loopName: {
+    color: colors.primary,
+    marginLeft: spacing.md,
+    marginBottom: spacing.sm,
+    fontWeight: '500',
+  },
   postCard: {
     backgroundColor: colors.surface,
     padding: spacing.md,
@@ -339,17 +483,16 @@ const styles = StyleSheet.create({
   postContent: {
     color: colors.textPrimary,
     fontSize: typography.md,
+    marginVertical: spacing.sm,
   },
-  commentsHeader: {
-    color: colors.textPrimary,
-    fontSize: typography.lg,
-    fontWeight: '600',
-    marginLeft: spacing.md,
+  postMeta: {
+    color: colors.textTertiary,
+    fontSize: typography.sm,
+  },
+  voteText: {
+    fontSize: typography.md,
     marginTop: spacing.sm,
-  },
-  list: {
-    flex: 1,
-    paddingHorizontal: spacing.md,
+    color: colors.textTertiary,
   },
   replyCard: {
     backgroundColor: colors.surfaceDark,
@@ -360,15 +503,23 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.sm,
   },
+  replyMeta: {
+    color: colors.textTertiary,
+    fontSize: typography.xs,
+    marginTop: spacing.xs,
+  },
+  replyActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.xs,
+  },
   replyLink: {
     color: colors.accent,
     fontSize: typography.sm,
-    marginLeft: spacing.xs,
-    marginTop: spacing.xs,
   },
   replyingBanner: {
     position: 'absolute',
-    bottom: 70,
+    bottom: 80,
     left: spacing.md,
     right: spacing.md,
     backgroundColor: colors.backgroundSecondary,
@@ -404,7 +555,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    color: colors.inputText,
+    color: colors.textPrimary,
     marginRight: spacing.sm,
   },
   sendBtn: {
@@ -420,4 +571,4 @@ const styles = StyleSheet.create({
     fontSize: typography.lg,
     fontWeight: '600',
   },
-});
+})

@@ -16,6 +16,9 @@ import NewPostScreen    from './src/screens/NewPostScreen';
 import ChatScreen       from './src/screens/ChatScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
 import ChatDetailScreen from './src/screens/ChatDetailScreen'
+import ProfileScreen    from './src/screens/ProfileScreen';
+import EditProfileScreen from './src/screens/EditProfileScreen';
+import UserProfileScreen from './src/screens/UserProfileScreen';
 
 import {
   AuthStackParamList,
@@ -32,7 +35,7 @@ const MainStack = createNativeStackNavigator<MainStackParamList>();
 function TabsNavigator() {
   return (
     <MainTabs.Navigator id={undefined} screenOptions={{ headerShown: false }}>
-      <MainTabs.Screen name="Home"    component={HomeScreen}/>
+      <MainTabs.Screen name="Home"    component={HomeScreen} options={{headerShown: true,}}/>
       <MainTabs.Screen name="Loops"   component={LoopsScreen}/>
       <MainTabs.Screen name="NewPost" component={NewPostScreen}/>
       <MainTabs.Screen name="Chat"    component={ChatScreen}/>
@@ -55,6 +58,22 @@ function MainApp() {
         name="ChatDetail"
         component={ChatDetailScreen}
         options={{ headerShown: true, title: 'Messages' }}
+      />
+      <MainStack.Screen 
+        name="Profile" 
+        component={ProfileScreen} 
+        options={{ headerShown: true, title: 'Profile' }} 
+      />
+      <MainStack.Screen 
+        name="EditProfile" 
+        component={EditProfileScreen} 
+        options={{ headerShown: true, title: 'Edit Profile' }} 
+      />
+
+      <MainStack.Screen
+        name="UserProfile"
+        component={UserProfileScreen}
+        options={{ title: 'Profile' }}
       />
     </MainStack.Navigator>
   );

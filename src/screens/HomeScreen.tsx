@@ -7,9 +7,9 @@ import {
   FlatList,
   ActivityIndicator,
   StyleSheet,
-  TouchableOpacity
+  TouchableOpacity,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
   doc,
   getDoc,
@@ -17,10 +17,20 @@ import {
   getDocs,
   query,
   orderBy,
-  Timestamp
+  Timestamp,
 } from 'firebase/firestore';
 import { auth, db } from '../../firebase';
+import {
+  commonStyles,
+  colors,
+  typography,
+  spacing,
+  borderRadius,
+  shadows,
+} from '../utils/styles';
+import { Ionicons } from '@expo/vector-icons';
 
+// Post shape
 interface Post {
   id: string;
   loopId: string;
@@ -39,71 +49,89 @@ export default function HomeScreen() {
   const uid = auth.currentUser?.uid!;
   const nav = useNavigation<any>();
 
-  // 1) Extract load logic to reuse on mount & pull-to-refresh
+  // 1) Load posts helper
   const loadPosts = useCallback(async () => {
     try {
-      // fetch user profile
-      const userRef  = doc(db, 'users', uid);
-      const userSnap = await getDoc(userRef);
+      // fetch joined loops
+      const userSnap = await getDoc(doc(db, 'users', uid));
       const joinedLoops: string[] = userSnap.exists()
         ? (userSnap.data().joinedLoops as string[])
         : [];
 
-      if (joinedLoops.length === 0) {
-        // no loops joined → empty list
+      if (!joinedLoops.length) {
         setPosts([]);
         return;
       }
 
-      // gather all posts across every joined loop
-      const allPosts: Post[] = [];
+      // gather posts across loops
+      const all: Post[] = [];
       for (const loopId of joinedLoops) {
-        const postsRef = collection(db, 'loops', loopId, 'posts');
-        const q        = query(postsRef, orderBy('createdAt', 'desc'));
-        const snap     = await getDocs(q);
-        snap.docs.forEach(d => {
-          allPosts.push({
-            id:       d.id,
-            loopId,
-            ...(d.data() as any)
-          });
-        });
+        const q    = query(
+          collection(db, 'loops', loopId, 'posts'),
+          orderBy('createdAt', 'desc')
+        );
+        const snap = await getDocs(q);
+        snap.forEach((d) =>
+          all.push({ id: d.id, loopId, ...(d.data() as any) })
+        );
       }
 
-      // sort by newest first
-      allPosts.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
-      setPosts(allPosts);
+      // sort newest-first
+      all.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+      setPosts(all);
     } catch (err) {
       console.warn('Error loading home posts:', err);
     }
   }, [uid]);
 
-  // 2) On mount
-  useEffect(() => {
-    (async () => {
-      await loadPosts();
-      setLoading(false);
-    })();
-  }, [loadPosts]);
+  // 2) on mount & on focus (so header button can refresh)
+  useFocusEffect(
+    React.useCallback(() => {
+      (async () => {
+        await loadPosts();
+        setLoading(false);
+      })();
+    }, [loadPosts])
+  );
 
-  // 3) Pull to refresh
+  // 3) pull-to-refresh
   const onRefresh = async () => {
     setRefresh(true);
     await loadPosts();
     setRefresh(false);
   };
 
+  // 4) configure header
+  useEffect(() => {
+    nav.setOptions({
+      headerStyle: {
+        backgroundColor: colors.background,
+        shadowColor: 'transparent',
+      },
+      headerTitle: () => <Text style={styles.headerTitle}>Loop</Text>,
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => nav.navigate('EditProfile')}
+          style={styles.headerButton}
+        >
+          <Ionicons name="person-circle-outline" size={28} color={colors.primary} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [nav]);
+
+  // 5) loading / empty states
   if (loading) {
     return (
-      <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color="#00d4ff" />
+      <SafeAreaView style={commonStyles.centerContent}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </SafeAreaView>
     );
   }
 
-  if (!loading && posts.length === 0) {
+  if (!posts.length) {
     return (
-      <SafeAreaView style={styles.center}>
+      <SafeAreaView style={commonStyles.centerContent}>
         <Text style={styles.emptyText}>
           no posts yet. join some loops or add a post!
         </Text>
@@ -111,49 +139,119 @@ export default function HomeScreen() {
     );
   }
 
+  // 6) render list
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={commonStyles.container}>
       <FlatList
         data={posts}
-        keyExtractor={item => item.id}
+        keyExtractor={(i) => i.id}
         contentContainerStyle={styles.list}
         refreshing={refreshing}
         onRefresh={onRefresh}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() =>
-              nav.navigate('PostDetail', {
-                loopId: item.loopId,
-                postId: item.id
-              })
-            }
-          >
-            <Text style={styles.loopLabel}>{item.loopId}</Text>
-            <Text style={styles.content}>{item.content}</Text>
-            <Text style={styles.meta}>
-              ❤️ {item.karma} •{' '}
-              {item.createdAt.toDate().toLocaleString()}
-            </Text>
-          </TouchableOpacity>
-        )}
+        renderItem={({ item }) => {
+          const dateStr = item.createdAt
+            .toDate()
+            .toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+            });
+          return (
+            <TouchableOpacity
+              style={[styles.card, shadows.sm]}
+              onPress={() =>
+                nav.navigate('PostDetail', {
+                  loopId: item.loopId,
+                  postId: item.id,
+                })
+              }
+            >
+              {/* Loop Label */}
+              <View style={styles.tag}>
+                <Text style={styles.tagText}>{item.loopId}</Text>
+              </View>
+
+              {/* Content */}
+              <Text style={styles.content}>{item.content}</Text>
+
+              {/* Meta Row */}
+              <View style={styles.metaRow}>
+                <View style={styles.metaItem}>
+                  <Ionicons name="heart-outline" size={16} color={colors.error} />
+                  <Text style={styles.metaText}>{item.karma}</Text>
+                </View>
+                <View style={[styles.metaItem, { marginLeft: spacing.lg / 2 }]}>
+                  <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+                  <Text style={styles.metaText}>{dateStr}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
       />
     </SafeAreaView>
   );
 }
 
+// Styles
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  center:    { flex: 1, backgroundColor: '#000', justifyContent:'center', alignItems:'center' },
-  emptyText: { color: '#888', textAlign:'center', padding:20 },
-  list:      { padding: 16 },
-  card:      {
-    backgroundColor: '#1e1e1e',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12
+  headerTitle: {
+    fontSize: typography.xxl,
+    fontWeight: typography.semibold as any,
+    color: colors.primary,
   },
-  loopLabel: { color: '#00d4ff', fontWeight:'600', marginBottom:4 },
-  content:   { color: '#fff', marginBottom:8 },
-  meta:      { color: '#888', fontSize:12 }
+  headerButton: {
+    marginRight: spacing.md,
+  },
+
+  emptyText: {
+    color: colors.textSecondary,
+    fontSize: typography.md,
+    textAlign: 'center',
+    padding: spacing.md,
+  },
+
+  list: {
+    padding: spacing.md,
+  },
+
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+
+  tag: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+    marginBottom: spacing.sm,
+  },
+  tagText: {
+    color: colors.background,
+    fontSize: typography.sm,
+    fontWeight: typography.semibold as any,
+  },
+
+  content: {
+    color: colors.textPrimary,
+    fontSize: typography.md,
+    marginBottom: spacing.md,
+  },
+
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaText: {
+    marginLeft: spacing.xs / 2,
+    color: colors.textSecondary,
+    fontSize: typography.sm,
+  },
 });
