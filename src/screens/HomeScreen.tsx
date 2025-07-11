@@ -111,7 +111,7 @@ export default function HomeScreen() {
       headerTitle: () => <Text style={styles.headerTitle}>Loop</Text>,
       headerRight: () => (
         <TouchableOpacity
-          onPress={() => nav.navigate('EditProfile')}
+          onPress={() => nav.navigate('MyProfile')}
           style={styles.headerButton}
         >
           <Ionicons name="person-circle-outline" size={28} color={colors.primary} />

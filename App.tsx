@@ -16,7 +16,7 @@ import NewPostScreen    from './src/screens/NewPostScreen';
 import ChatScreen       from './src/screens/ChatScreen';
 import PostDetailScreen from './src/screens/PostDetailScreen';
 import ChatDetailScreen from './src/screens/ChatDetailScreen'
-import ProfileScreen    from './src/screens/ProfileScreen';
+import MyProfileScreen    from './src/screens/MyProfileScreen';
 import EditProfileScreen from './src/screens/EditProfileScreen';
 import UserProfileScreen from './src/screens/UserProfileScreen';
 
@@ -60,8 +60,8 @@ function MainApp() {
         options={{ headerShown: true, title: 'Messages' }}
       />
       <MainStack.Screen 
-        name="Profile" 
-        component={ProfileScreen} 
+        name="MyProfile" 
+        component={MyProfileScreen} 
         options={{ headerShown: true, title: 'Profile' }} 
       />
       <MainStack.Screen 
@@ -73,7 +73,7 @@ function MainApp() {
       <MainStack.Screen
         name="UserProfile"
         component={UserProfileScreen}
-        options={{ title: 'Profile' }}
+        options={{ title: 'User Profile' }}
       />
     </MainStack.Navigator>
   );

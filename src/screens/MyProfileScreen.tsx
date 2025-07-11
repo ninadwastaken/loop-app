@@ -22,9 +22,9 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack'
 import { MainStackParamList } from '../types/navigation'
 
-type Props = NativeStackScreenProps<MainStackParamList, 'Profile'>
+type Props = NativeStackScreenProps<MainStackParamList, 'MyProfile'>
 
-export default function ProfileScreen({ navigation }: Props) {
+export default function MyProfileScreen({ navigation }: Props) {
   const uid = auth.currentUser!.uid
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading]   = useState(true)
