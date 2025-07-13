@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+// src/screens/NewPostScreen.tsx
+
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -8,77 +10,108 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   collection,
   getDocs,
   doc,
   setDoc,
+  addDoc,
   serverTimestamp,
-} from 'firebase/firestore';
-import { db, auth } from '../../firebase';
-import { Loop } from '../types';
+  writeBatch,
+} from 'firebase/firestore'
+import { db, auth } from '../../firebase'
+import { Loop } from '../types'
 import {
   commonStyles,
   colors,
   spacing,
   typography,
   borderRadius,
-} from '../utils/styles'; // Adjust the path if needed
+  shadows,
+} from '../utils/styles'
 
 export default function NewPostScreen() {
-  const [loops, setLoops] = useState<Loop[]>([]);
-  const [selectedLoop, setSelectedLoop] = useState<string | null>(null);
-  const [content, setContent] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const uid = auth.currentUser?.uid!;
+  const [loops, setLoops] = useState<Loop[]>([])
+  const [selectedLoop, setSelectedLoop] = useState<string | null>(null)
+  const [content, setContent] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const uid = auth.currentUser!.uid
 
+  // load all loops once
   useEffect(() => {
-    (async () => {
+    ;(async () => {
       try {
-        const loopSnap = await getDocs(collection(db, 'loops'));
-        setLoops(loopSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) })));
+        const snap = await getDocs(collection(db, 'loops'))
+        const arr = snap.docs.map(d => ({
+          id: d.id,
+          ...(d.data() as any),
+        }))
+        setLoops(arr)
       } catch (err) {
-        console.warn('Error loading loops:', err);
-        Alert.alert('Error', 'Could not load loops');
+        console.warn('Error loading loops:', err)
+        Alert.alert('Error', 'Could not load loops')
       }
-    })();
-  }, []);
+    })()
+  }, [])
 
   const handleSubmit = async () => {
     if (!selectedLoop) {
-      return Alert.alert('Pick a Loop', 'Choose which loop to post in');
+      return Alert.alert('Pick a Loop', 'Choose a loop to post in')
     }
     if (!content.trim()) {
-      return Alert.alert('Empty Post', 'Type something first');
+      return Alert.alert('Empty Post', 'Type something to post')
     }
-    setSubmitting(true);
+
+    setSubmitting(true)
     try {
-      const postRef = doc(collection(db, 'loops', selectedLoop, 'posts'));
-      await setDoc(postRef, {
+      // 1) Create post in loops/{loopId}/posts
+      const loopPostsRef = collection(db, 'loops', selectedLoop, 'posts')
+      const newPostRef = await addDoc(loopPostsRef, {
         content: content.trim(),
         posterId: uid,
         anon: false,
         karma: 0,
         createdAt: serverTimestamp(),
-      });
-      setContent('');
-      Alert.alert('Posted!', 'Your post went live 🔥');
-    } catch (err) {
-      console.warn('Error creating post:', err);
-      Alert.alert('Error', 'Could not create post');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+      })
 
+      // 2) Mirror into users/{uid}/posts/{postId}
+      const userPostsRef = doc(
+        db,
+        'users',
+        uid,
+        'posts',
+        newPostRef.id
+      )
+      await setDoc(userPostsRef, {
+        loopId: selectedLoop,
+        postId: newPostRef.id,
+        content: content.trim(),
+        posterId: uid,
+        anon: false,
+        karma: 0,
+        createdAt: serverTimestamp(),
+      })
+
+      setContent('')
+      Alert.alert('Posted!', 'Your post is live 🔥')
+      // optionally navigate back or reset fields…
+    } catch (err) {
+      console.warn('Error creating post:', err)
+      Alert.alert('Error', 'Could not create post')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // still loading loops?
   if (!loops.length) {
     return (
       <SafeAreaView style={commonStyles.centerContent}>
         <ActivityIndicator size="large" color={colors.accent} />
       </SafeAreaView>
-    );
+    )
   }
 
   return (
@@ -87,15 +120,16 @@ export default function NewPostScreen() {
       <FlatList
         data={loops}
         horizontal
-        keyExtractor={item => item.id}
+        keyExtractor={it => it.id}
         contentContainerStyle={styles.loopList}
         renderItem={({ item }) => {
-          const isSel = item.id === selectedLoop;
+          const isSel = item.id === selectedLoop
           return (
             <TouchableOpacity
               style={[
                 styles.loopBadge,
                 isSel ? styles.loopSelected : styles.loopUnselected,
+                shadows.sm,
               ]}
               onPress={() => setSelectedLoop(item.id)}
             >
@@ -108,13 +142,13 @@ export default function NewPostScreen() {
                 {item.name}
               </Text>
             </TouchableOpacity>
-          );
+          )
         }}
       />
 
       <TextInput
         style={styles.input}
-        placeholder="Write a post..."
+        placeholder="Write your post…"
         placeholderTextColor={colors.inputPlaceholder}
         value={content}
         onChangeText={setContent}
@@ -122,7 +156,7 @@ export default function NewPostScreen() {
       />
 
       <TouchableOpacity
-        style={styles.button}
+        style={[styles.button, submitting && { opacity: 0.5 } ]}
         onPress={handleSubmit}
         disabled={submitting}
       >
@@ -133,7 +167,7 @@ export default function NewPostScreen() {
         )}
       </TouchableOpacity>
     </SafeAreaView>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
@@ -142,14 +176,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     padding: spacing.md,
   },
+
   label: {
     color: colors.textPrimary,
     fontSize: typography.md,
     marginBottom: spacing.sm,
   },
+
   loopList: {
     paddingBottom: spacing.md,
   },
+
   loopBadge: {
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
@@ -162,27 +199,29 @@ const styles = StyleSheet.create({
   loopUnselected: {
     backgroundColor: colors.surfaceDark,
   },
+
   loopText: {
     fontSize: typography.sm,
+    fontWeight: '500',
   },
   loopTextSel: {
     color: colors.black,
-    fontWeight: '500', // fixed
   },
   loopTextUnsel: {
     color: colors.white,
-    fontWeight: '500', // fixed
   },
+
   input: {
     flex: 1,
-    backgroundColor: colors.inputBackground,
-    color: colors.inputText,
+    backgroundColor: colors.surface,
+    color: colors.textPrimary,
     borderRadius: borderRadius.md,
     padding: spacing.md,
     textAlignVertical: 'top',
-    marginBottom: spacing.lg,
+    marginVertical: spacing.lg,
     minHeight: 120,
   },
+
   button: {
     backgroundColor: colors.accent,
     padding: spacing.md,
@@ -191,7 +230,7 @@ const styles = StyleSheet.create({
   },
   btnText: {
     color: colors.white,
-    fontWeight: '600', // fixed
+    fontWeight: '600',
     fontSize: typography.md,
   },
-});
+})
