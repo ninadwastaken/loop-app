@@ -1,5 +1,5 @@
 // src/screens/LoopsScreen.tsx
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useLayoutEffect, useCallback } from 'react'
 import {
   SafeAreaView,
   View,
@@ -13,7 +13,7 @@ import {
 import debounce from 'lodash.debounce'
 import {
   collection,
-  getDocs,
+  onSnapshot,
   doc,
   getDoc,
   updateDoc,
@@ -22,7 +22,6 @@ import {
 } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { Loop } from '../types'
-
 import {
   commonStyles,
   colors,
@@ -32,53 +31,90 @@ import {
   shadows,
 } from '../utils/styles'
 
-export default function LoopsScreen() {
-  const [allLoops, setAllLoops]       = useState<Loop[]>([])
-  const [filteredLoops, setFiltered]  = useState<Loop[]>([])
-  const [joined, setJoined]           = useState<string[]>([])
-  const [loading, setLoading]         = useState(true)
-  const [query, setQuery]             = useState('')
-
-  const uid     = auth.currentUser!.uid
+export default function LoopsScreen({ navigation }: any) {
+  const uid = auth.currentUser!.uid
   const userRef = doc(db, 'users', uid)
 
-  // 1️⃣ Load loops & joined loops
+  const [allLoops, setAllLoops] = useState<Loop[]>([])
+  const [filteredLoops, setFilteredLoops] = useState<Loop[]>([])
+  const [joined, setJoined] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [query, setQuery] = useState('')
+
+  //
+  // 1) Add "+" button in header to navigate to CreateLoop screen
+  //
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: 'Loops',
+      headerRight: () => (
+        <TouchableOpacity
+          style={{ marginRight: spacing.md }}
+          onPress={() => navigation.navigate('CreateLoop')}
+        >
+          <Text style={{ color: colors.primary, fontSize: typography.lg }}>＋</Text>
+        </TouchableOpacity>
+      ),
+    })
+  }, [navigation])
+
+  //
+  // 2) Real-time subscription to loops collection
+  //
   useEffect(() => {
-    ;(async () => {
-      try {
-        const loopSnap = await getDocs(collection(db, 'loops'))
-        const loops = loopSnap.docs.map(d => ({
+    // Subscribe to loops
+    const loopsCol = collection(db, 'loops')
+    const unsubscribeLoops = onSnapshot(
+      loopsCol,
+      snapshot => {
+        const loops = snapshot.docs.map(d => ({
           id: d.id,
           ...(d.data() as Omit<Loop, 'id'>),
         }))
+        // update both allLoops + filtered
         setAllLoops(loops)
-        setFiltered(loops)
-
-        const userSnap = await getDoc(userRef)
-        setJoined(userSnap.exists() ? userSnap.data().joinedLoops || [] : [])
-      } catch (err) {
-        console.warn('Error loading loops/user:', err)
-      } finally {
+        setFilteredLoops(loops)
+        setLoading(false)
+      },
+      err => {
+        console.warn('Error listening loops:', err)
         setLoading(false)
       }
-    })()
-  }, [])
+    )
 
-  // 2️⃣ Debounced search
+    // Fetch user’s joinedLoops once
+    ;(async () => {
+      try {
+        const userSnap = await getDoc(userRef)
+        const jl = userSnap.exists() ? (userSnap.data().joinedLoops as string[]) || [] : []
+        setJoined(jl)
+      } catch (err) {
+        console.warn('Error fetching joined loops:', err)
+      }
+    })()
+
+    return () => {
+      unsubscribeLoops()
+    }
+  }, [userRef])
+
+  //
+  // 3) Debounced search
+  //
   const debouncedFilter = useMemo(
     () =>
       debounce((text: string) => {
-        if (!text) return setFiltered(allLoops)
-
+        if (!text) {
+          setFilteredLoops(allLoops)
+          return
+        }
         const lower = text.toLowerCase()
-        const filtered = allLoops.filter(loop =>
-          // search in name or description (or tags if you add them)
-          loop.name.toLowerCase().includes(lower) ||
-          (loop.description || '')
-            .toLowerCase()
-            .includes(lower)
+        const fil = allLoops.filter(
+          l =>
+            l.name.toLowerCase().includes(lower) ||
+            (l.description || '').toLowerCase().includes(lower)
         )
-        setFiltered(filtered)
+        setFilteredLoops(fil)
       }, 300),
     [allLoops]
   )
@@ -88,21 +124,29 @@ export default function LoopsScreen() {
     debouncedFilter(text)
   }
 
-  // 3️⃣ Toggle join/leave
-  const toggleJoin = async (loopId: string) => {
-    try {
-      if (joined.includes(loopId)) {
-        await updateDoc(userRef, { joinedLoops: arrayRemove(loopId) })
-        setJoined(prev => prev.filter(id => id !== loopId))
-      } else {
-        await updateDoc(userRef, { joinedLoops: arrayUnion(loopId) })
-        setJoined(prev => [...prev, loopId])
+  //
+  // 4) Join / Leave loop
+  //
+  const toggleJoin = useCallback(
+    async (loopId: string) => {
+      try {
+        if (joined.includes(loopId)) {
+          await updateDoc(userRef, { joinedLoops: arrayRemove(loopId) })
+          setJoined(prev => prev.filter(i => i !== loopId))
+        } else {
+          await updateDoc(userRef, { joinedLoops: arrayUnion(loopId) })
+          setJoined(prev => [...prev, loopId])
+        }
+      } catch (err) {
+        console.warn('Error toggling join:', err)
       }
-    } catch (err) {
-      console.warn('Error toggling join:', err)
-    }
-  }
+    },
+    [joined, userRef]
+  )
 
+  //
+  // 5) Loading state
+  //
   if (loading) {
     return (
       <SafeAreaView style={commonStyles.centerContent}>
@@ -112,9 +156,8 @@ export default function LoopsScreen() {
   }
 
   return (
-    // ❶ Now we wrap everything in SafeAreaView
     <SafeAreaView style={commonStyles.container}>
-      {/* 🔍 Search bar + Filters pill */}
+      {/* Search Bar */}
       <View style={[styles.searchBar, shadows.sm]}>
         <TextInput
           style={styles.searchInput}
@@ -123,11 +166,12 @@ export default function LoopsScreen() {
           value={query}
           onChangeText={onSearchChange}
         />
-        <TouchableOpacity style={styles.filterBtn} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.filterBtn}>
           <Text style={styles.filterText}>Filters</Text>
         </TouchableOpacity>
       </View>
 
+      {/* No Loops */}
       {filteredLoops.length === 0 ? (
         <View style={commonStyles.centerContent}>
           <Text style={styles.emptyText}>no loops found.</Text>
@@ -143,17 +187,15 @@ export default function LoopsScreen() {
               <View style={[styles.item, shadows.sm]}>
                 <View style={styles.info}>
                   <Text style={styles.name}>{item.name}</Text>
-                  {item.description && (
+                  {item.description ? (
                     <Text style={styles.desc}>{item.description}</Text>
-                  )}
+                  ) : null}
                 </View>
                 <TouchableOpacity
                   style={[styles.btn, isJoined ? styles.leave : styles.join]}
                   onPress={() => toggleJoin(item.id)}
                 >
-                  <Text style={styles.btnText}>
-                    {isJoined ? 'leave' : 'join'}
-                  </Text>
+                  <Text style={styles.btnText}>{isJoined ? 'leave' : 'join'}</Text>
                 </TouchableOpacity>
               </View>
             )
@@ -205,7 +247,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  info: { flex: 1, paddingRight: spacing.sm },
+  info: {
+    flex: 1,
+    paddingRight: spacing.sm,
+  },
   name: {
     color: colors.textPrimary,
     fontSize: typography.lg,
@@ -221,7 +266,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.sm,
   },
-  join: { backgroundColor: colors.success },
-  leave: { backgroundColor: colors.error },
-  btnText: { color: colors.white, fontWeight: '600' },
+  join: {
+    backgroundColor: colors.success,
+  },
+  leave: {
+    backgroundColor: colors.error,
+  },
+  btnText: {
+    color: colors.white,
+    fontWeight: '600',
+  },
 })

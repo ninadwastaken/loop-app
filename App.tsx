@@ -14,6 +14,7 @@ import SignupScreen           from './src/screens/SignupScreen'
 import InterestsScreen        from './src/screens/InterestsScreen'
 import HomeScreen             from './src/screens/HomeScreen'
 import LoopsScreen            from './src/screens/LoopsScreen'
+import CreateLoopScreen       from './src/screens/CreateLoopScreen'   // newly added
 import NewPostScreen          from './src/screens/NewPostScreen'
 import ChatScreen             from './src/screens/ChatScreen'
 import ChatDetailScreen       from './src/screens/ChatDetailScreen'
@@ -37,19 +38,38 @@ const MainStack = createNativeStackNavigator<MainStackParamList>()
 
 function TabsNavigator() {
   return (
-    <MainTabs.Navigator id={undefined} screenOptions={{ headerShown: false }}>
-      <MainTabs.Screen name="Home"    component={HomeScreen}    />
-      <MainTabs.Screen name="Loops"   component={LoopsScreen}   />
+    <MainTabs.Navigator
+      screenOptions={{ headerShown: false }}
+    >
+      {/* Home tab with custom header */}
+      <MainTabs.Screen
+        name="Home"
+        component={HomeScreen}
+        options={({ navigation }) => ({
+          // show header
+          headerShown: true 
+        })}
+      />
+
+      {/* Other tabs */}
+      <MainTabs.Screen 
+        name="Loops"   
+        component={LoopsScreen} 
+        options={({ navigation }) => ({
+          headerShown: true,
+        })}
+      />
       <MainTabs.Screen name="NewPost" component={NewPostScreen} />
-      <MainTabs.Screen name="Chat"    component={ChatScreen}    />
+      <MainTabs.Screen name="Chat"    component={ChatScreen} />
     </MainTabs.Navigator>
   )
 }
 
 function MainApp() {
   return (
-    <MainStack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
-      <MainStack.Screen name="Tabs"         component={TabsNavigator} />
+    <MainStack.Navigator screenOptions={{ headerShown: false }}>
+      <MainStack.Screen name="Tabs"       component={TabsNavigator} />
+
       <MainStack.Screen
         name="PostDetail"
         component={PostDetailScreen}
@@ -74,6 +94,15 @@ function MainApp() {
         name="UserProfile"
         component={UserProfileScreen}
         options={{ headerShown: true, title: 'User Profile' }}
+      />
+      <MainStack.Screen
+        name="CreateLoop"
+        component={CreateLoopScreen}
+        options={{
+          headerShown: true,
+          title: 'New Loop',
+          headerBackTitle: 'Back',
+        }}
       />
     </MainStack.Navigator>
   )
@@ -114,8 +143,8 @@ export default function App() {
       setProfile(null)
       return
     }
-    const userRef     = doc(db, 'users', user.uid)
-    const unsubSnap   = onSnapshot(userRef, (snap) => {
+    const userRef   = doc(db, 'users', user.uid)
+    const unsubSnap = onSnapshot(userRef, (snap) => {
       setProfile(snap.exists() ? (snap.data() as any) : null)
     })
     return unsubSnap
@@ -128,21 +157,14 @@ export default function App() {
   return (
     <NavigationContainer>
       {!user ? (
-        <AuthStack.Navigator id={undefined}
-          screenOptions={{ headerShown: false }}
-        >
+        <AuthStack.Navigator screenOptions={{ headerShown: false }}>
           <AuthStack.Screen name="Signup"    component={SignupScreen}    />
           <AuthStack.Screen name="Login"     component={LoginScreen}     />
           <AuthStack.Screen name="Interests" component={InterestsScreen} />
         </AuthStack.Navigator>
       ) : !profile?.interests?.length ? (
-        <AuthStack.Navigator id={undefined}
-          screenOptions={{ headerShown: false }}
-        >
-          <AuthStack.Screen
-            name="Interests"
-            component={InterestsScreen}
-          />
+        <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+          <AuthStack.Screen name="Interests" component={InterestsScreen} />
         </AuthStack.Navigator>
       ) : (
         <MainApp />

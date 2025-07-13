@@ -1,5 +1,4 @@
 // src/screens/NewPostScreen.tsx
-
 import React, { useState, useEffect } from 'react'
 import {
   View,
@@ -14,12 +13,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   collection,
-  getDocs,
+  getDoc,
   doc,
-  setDoc,
   addDoc,
   serverTimestamp,
-  writeBatch,
+  getDocs,
+  query,
+  where,
 } from 'firebase/firestore'
 import { db, auth } from '../../firebase'
 import { Loop } from '../types'
@@ -33,28 +33,65 @@ import {
 } from '../utils/styles'
 
 export default function NewPostScreen() {
-  const [loops, setLoops] = useState<Loop[]>([])
-  const [selectedLoop, setSelectedLoop] = useState<string | null>(null)
-  const [content, setContent] = useState('')
-  const [submitting, setSubmitting] = useState(false)
   const uid = auth.currentUser!.uid
 
-  // load all loops once
+  const [joinedLoopIds, setJoinedLoopIds] = useState<string[]|null>(null)
+  const [loops, setLoops]       = useState<Loop[]>([])
+  const [selectedLoop, setSelectedLoop] = useState<string|null>(null)
+  const [content, setContent]   = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  // 1️⃣ Load user doc to get `joinedLoops`
   useEffect(() => {
     ;(async () => {
       try {
-        const snap = await getDocs(collection(db, 'loops'))
-        const arr = snap.docs.map(d => ({
-          id: d.id,
-          ...(d.data() as any),
-        }))
-        setLoops(arr)
+        const userSnap = await getDoc(doc(db, 'users', uid))
+        if (!userSnap.exists()) {
+          return Alert.alert('Error', 'Your user record was not found.')
+        }
+        const data = userSnap.data()
+        const arr = (data.joinedLoops as string[]) || []
+        setJoinedLoopIds(arr)
       } catch (err) {
-        console.warn('Error loading loops:', err)
-        Alert.alert('Error', 'Could not load loops')
+        console.warn('Error loading user loops:', err)
+        Alert.alert('Error', 'Could not load your joined loops.')
       }
     })()
-  }, [])
+  }, [uid])
+
+  // 2️⃣ Once we have joinedLoopIds, fetch only those loops
+  useEffect(() => {
+    if (!joinedLoopIds) return
+
+    ;(async () => {
+      if (joinedLoopIds.length === 0) {
+        setLoops([])
+        return
+      }
+      try {
+        // Firestore `in` query supports <= 10 elements;
+        // if you have more than 10 you’ll need to batch them.
+        const batches: Loop[][] = []
+        const chunkSize = 10
+        for (let i = 0; i < joinedLoopIds.length; i += chunkSize) {
+          const chunk = joinedLoopIds.slice(i, i + chunkSize)
+          const q = query(
+            collection(db, 'loops'),
+            where('__name__', 'in', chunk)
+          )
+          const snap = await getDocs(q)
+          batches.push(
+            snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))
+          )
+        }
+        // flatten all batches into one array
+        setLoops(batches.flat())
+      } catch (err) {
+        console.warn('Error loading loops:', err)
+        Alert.alert('Error', 'Could not load your loops.')
+      }
+    })()
+  }, [joinedLoopIds])
 
   const handleSubmit = async () => {
     if (!selectedLoop) {
@@ -66,7 +103,7 @@ export default function NewPostScreen() {
 
     setSubmitting(true)
     try {
-      // 1) Create post in loops/{loopId}/posts
+      // 1) Create post under loops/{loopId}/posts
       const loopPostsRef = collection(db, 'loops', selectedLoop, 'posts')
       const newPostRef = await addDoc(loopPostsRef, {
         content: content.trim(),
@@ -96,7 +133,6 @@ export default function NewPostScreen() {
 
       setContent('')
       Alert.alert('Posted!', 'Your post is live 🔥')
-      // optionally navigate back or reset fields…
     } catch (err) {
       console.warn('Error creating post:', err)
       Alert.alert('Error', 'Could not create post')
@@ -105,7 +141,27 @@ export default function NewPostScreen() {
     }
   }
 
-  // still loading loops?
+  // still loading joinedLoopIds?
+  if (joinedLoopIds === null) {
+    return (
+      <SafeAreaView style={commonStyles.centerContent}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </SafeAreaView>
+    )
+  }
+
+  // if they’ve joined zero loops
+  if (joinedLoopIds.length === 0) {
+    return (
+      <SafeAreaView style={commonStyles.centerContent}>
+        <Text style={{ color: colors.textTertiary }}>
+          You haven’t joined any loops yet. Join a loop first!
+        </Text>
+      </SafeAreaView>
+    )
+  }
+
+  // still fetching the loop docs?
   if (!loops.length) {
     return (
       <SafeAreaView style={commonStyles.centerContent}>
@@ -156,7 +212,7 @@ export default function NewPostScreen() {
       />
 
       <TouchableOpacity
-        style={[styles.button, submitting && { opacity: 0.5 } ]}
+        style={[styles.button, submitting && { opacity: 0.5 }]}
         onPress={handleSubmit}
         disabled={submitting}
       >
@@ -176,17 +232,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     padding: spacing.md,
   },
-
   label: {
     color: colors.textPrimary,
     fontSize: typography.md,
     marginBottom: spacing.sm,
   },
-
   loopList: {
     paddingBottom: spacing.md,
   },
-
   loopBadge: {
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
@@ -199,7 +252,6 @@ const styles = StyleSheet.create({
   loopUnselected: {
     backgroundColor: colors.surfaceDark,
   },
-
   loopText: {
     fontSize: typography.sm,
     fontWeight: '500',
@@ -210,7 +262,6 @@ const styles = StyleSheet.create({
   loopTextUnsel: {
     color: colors.white,
   },
-
   input: {
     flex: 1,
     backgroundColor: colors.surface,
@@ -221,7 +272,6 @@ const styles = StyleSheet.create({
     marginVertical: spacing.lg,
     minHeight: 120,
   },
-
   button: {
     backgroundColor: colors.accent,
     padding: spacing.md,

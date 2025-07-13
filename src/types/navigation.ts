@@ -37,6 +37,7 @@ export type MainStackParamList = {
   MyProfile:    undefined                               // profile view
   EditProfile: undefined                               // edit profile view    
   UserProfile: { userId: string }                     // view another user's profile   
+  CreateLoop:  undefined                               // create a new loop
 }
 
 /**
