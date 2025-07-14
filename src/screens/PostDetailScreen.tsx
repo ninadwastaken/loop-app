@@ -39,6 +39,8 @@ import {
   borderRadius,
   commonStyles,
 } from '../utils/styles'
+import { voteOnPost } from '../utils/voteService'
+import Ionicons from '@expo/vector-icons/Ionicons'
 
 // ──────────────────────────
 // Types
@@ -132,59 +134,72 @@ export default function PostDetailScreen({ route, navigation }: any) {
   const [post, setPost] = useState<PostData | null>(null)
   const [tree, setTree] = useState<ThreadedReply[]>([])
   const [flatListData, setFlatListData] = useState<any[]>([])
-  const [localVotes, setLocalVotes] = useState<Record<string, boolean>>({})
+  const [localVotes, setLocalVotes] = useState<Record<string, number>>({})
   const [commentText, setCommentText] = useState('')
   const [replyTo, setReplyTo] = useState<{ id: string; content: string } | null>(
     null
   )
   const [submitting, setSubmitting] = useState(false)
 
-  // Toggle upvote/downvote
+  // Toggle upvote/downvote (accepts voteValue: 1 for up, -1 for down)
   const toggleVote = async (
     parentPath: string,
-    targetId: string
+    targetId: string,
+    voteValue: 1 | -1
   ) => {
-    // build correct refs
-    const voteRef = doc(
-      db as Firestore,
-      ...parentPath.split('/'),
-      'votes',
-      uid
-    )
-    const parentRef = doc(db as Firestore, ...parentPath.split('/'))
-
-    const hasVoted = !!localVotes[targetId]
-    const delta = hasVoted ? -1 : 1
+    // Determine loopId from parentPath ("loops/{loopId}/...")
+    const [, loopId] = parentPath.split('/')
+    const prevVote = localVotes[targetId] ?? 0
+    const newVote = prevVote === voteValue ? 0 : voteValue
 
     // optimistic update
-    setLocalVotes(p => ({ ...p, [targetId]: !hasVoted }))
+    setLocalVotes(p => ({ ...p, [targetId]: newVote }))
     if (targetId === postId) {
       setPost(p =>
-        p ? { ...p, karma: p.karma + delta } : (p as PostData)
+        p ? { ...p, karma: p.karma + (newVote - prevVote) } : p
       )
     } else {
-      setTree(t => adjustReplies(t, targetId, delta))
+      setTree(t => adjustReplies(t, targetId, newVote - prevVote))
     }
 
     try {
-      if (hasVoted) {
-        await deleteDoc(voteRef)
-        await updateDoc(parentRef, { karma: increment(-1) })
+      // For replies, parentPath includes replies path but voteService only needs loopId and post/reply ID.
+      // We'll treat targetId as the postId for top-level or replyId for replies.
+      if (parentPath.includes('/replies/')) {
+        // write or delete vote doc
+        const voteRef = doc(
+          db,
+          parentPath,
+          'votes',
+          uid
+        )
+        const replyRef = doc(db, parentPath)
+        if (newVote === 0) {
+          await deleteDoc(voteRef)
+        } else {
+          await setDoc(voteRef, { value: newVote })
+        }
+        // update reply upvotes/downvotes
+        const upChange = (newVote === 1 ? 1 : 0) - (prevVote === 1 ? 1 : 0)
+        const downChange = (newVote === -1 ? 1 : 0) - (prevVote === -1 ? 1 : 0)
+        await updateDoc(replyRef, {
+          upvotes: increment(upChange),
+          downvotes: increment(downChange),
+        })
       } else {
-        await setDoc(voteRef, { value: 1 })
-        await updateDoc(parentRef, { karma: increment(1) })
+        await voteOnPost(loopId, targetId, uid, newVote)
       }
     } catch (err) {
       console.warn('Vote error:', err)
       Alert.alert('Error', 'Could not update vote.')
-      // rollback
-      setLocalVotes(p => ({ ...p, [targetId]: hasVoted }))
+      // rollback optimistic update
+      setLocalVotes(p => ({ ...p, [targetId]: prevVote }))
       if (targetId === postId) {
         setPost(p =>
-          p ? { ...p, karma: p.karma - delta } : (p as PostData)
+          p ? { ...p, karma: p.karma - (newVote - prevVote) } : p
         )
       } else {
-        setTree(t => adjustReplies(t, targetId, -delta))
+        setTree(t => adjustReplies(t, targetId, prevVote - newVote))
       }
     }
   }
@@ -223,9 +238,17 @@ export default function PostDetailScreen({ route, navigation }: any) {
       const pvSnap = await getDocs(
         collection(db, 'loops', loopId, 'posts', postId, 'votes')
       )
+      // If user has voted, get the value (1 or -1), else 0
+      let postVoteValue = 0
+      for (let d of pvSnap.docs) {
+        if (d.id === uid) {
+          const v = d.data().value
+          postVoteValue = typeof v === 'number' ? v : 1
+        }
+      }
       setLocalVotes(p => ({
         ...p,
-        [postId]: pvSnap.docs.some(d => d.id === uid),
+        [postId]: postVoteValue,
       }))
 
       // 3) Fetch all replies (flat)
@@ -251,9 +274,17 @@ export default function PostDetailScreen({ route, navigation }: any) {
             'votes'
           )
         )
+        // If user has voted, get the value (1 or -1), else 0
+        let replyVoteValue = 0
+        for (let v of rv.docs) {
+          if (v.id === uid) {
+            const val = v.data().value
+            replyVoteValue = typeof val === 'number' ? val : 1
+          }
+        }
         setLocalVotes(p => ({
           ...p,
-          [d.id]: rv.docs.some(v => v.id === uid),
+          [d.id]: replyVoteValue,
         }))
         flat.push({
           id: d.id,
@@ -349,20 +380,32 @@ export default function PostDetailScreen({ route, navigation }: any) {
           <Text style={styles.loopName}>#{p.loopName}</Text>
           <Text style={styles.postContent}>{p.content}</Text>
           <Text style={styles.postMeta}>{p.createdAt}</Text>
-          <TouchableOpacity
-            onPress={() =>
-              toggleVote(`loops/${loopId}/posts/${postId}`, postId)
-            }
-          >
-            <Text
-              style={[
-                styles.voteText,
-                localVotes[postId] && { color: colors.accent },
-              ]}
+          <View style={styles.voteRow}>
+            <TouchableOpacity
+              onPress={() =>
+                toggleVote(`loops/${loopId}/posts/${postId}`, postId, 1)
+              }
             >
-              ❤️ {p.karma}
-            </Text>
-          </TouchableOpacity>
+              <Ionicons
+                name="arrow-up-circle"
+                size={24}
+                color={localVotes[postId] === 1 ? colors.accent : colors.textTertiary}
+              />
+            </TouchableOpacity>
+            <Text style={styles.voteCount}>{p.karma}</Text>
+            <TouchableOpacity
+              onPress={() =>
+                toggleVote(`loops/${loopId}/posts/${postId}`, postId, -1)
+              }
+              style={{ marginLeft: spacing.sm }}
+            >
+              <Ionicons
+                name="arrow-down-circle"
+                size={24}
+                color={localVotes[postId] === -1 ? colors.accent : colors.textTertiary}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       )
     }
@@ -382,23 +425,40 @@ export default function PostDetailScreen({ route, navigation }: any) {
           <Text style={styles.replyContent}>{r.content}</Text>
           <Text style={styles.replyMeta}>{date}</Text>
           <View style={styles.replyActions}>
-            <TouchableOpacity
-              onPress={() =>
-                toggleVote(
-                  `loops/${loopId}/posts/${postId}/replies/${r.id}`,
-                  r.id
-                )
-              }
-            >
-              <Text
-                style={[
-                  styles.voteText,
-                  localVotes[r.id] && { color: colors.accent },
-                ]}
+            <View style={styles.voteRow}>
+              <TouchableOpacity
+                onPress={() =>
+                  toggleVote(
+                    `loops/${loopId}/posts/${postId}/replies/${r.id}`,
+                    r.id,
+                    1
+                  )
+                }
               >
-                ❤️ {r.karma}
-              </Text>
-            </TouchableOpacity>
+                <Ionicons
+                  name="arrow-up-circle"
+                  size={20}
+                  color={localVotes[r.id] === 1 ? colors.accent : colors.textTertiary}
+                />
+              </TouchableOpacity>
+              <Text style={styles.voteCount}>{r.karma}</Text>
+              <TouchableOpacity
+                onPress={() =>
+                  toggleVote(
+                    `loops/${loopId}/posts/${postId}/replies/${r.id}`,
+                    r.id,
+                    -1
+                  )
+                }
+                style={{ marginLeft: spacing.sm }}
+              >
+                <Ionicons
+                  name="arrow-down-circle"
+                  size={20}
+                  color={localVotes[r.id] === -1 ? colors.accent : colors.textTertiary}
+                />
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
               onPress={() =>
                 setReplyTo({ id: r.id, content: r.content })
@@ -570,5 +630,15 @@ const styles = StyleSheet.create({
     color: colors.black,
     fontSize: typography.lg,
     fontWeight: '600',
+  },
+  voteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  voteCount: {
+    marginHorizontal: spacing.xs,
+    fontSize: typography.md,
+    color: colors.textPrimary,
   },
 })

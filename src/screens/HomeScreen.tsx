@@ -12,12 +12,13 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
   doc,
-  getDoc,
+  getDoc as getLoopDoc,
   collection,
   getDocs,
   query,
   orderBy,
   Timestamp,
+  getDoc as getVoteDoc,
 } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import {
@@ -29,6 +30,7 @@ import {
   shadows,
 } from '../utils/styles';
 import { Ionicons } from '@expo/vector-icons';
+import { voteOnPost } from '../utils/voteService'
 
 // Post shape
 interface Post {
@@ -40,12 +42,15 @@ interface Post {
   anon: boolean;
   karma: number;
   createdAt: Timestamp;
+  upvotes: number;
+  downvotes: number;
 }
 
 export default function HomeScreen() {
   const [posts, setPosts]       = useState<Post[]>([]);
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefresh] = useState(false);
+  const [userVotes, setUserVotes] = useState<Record<string, number>>({});
 
   const uid = auth.currentUser?.uid!;
   const nav = useNavigation<any>();
@@ -54,7 +59,7 @@ export default function HomeScreen() {
   const loadPosts = useCallback(async () => {
     try {
       // fetch joined loops
-      const userSnap = await getDoc(doc(db, 'users', uid));
+      const userSnap = await getLoopDoc(doc(db, 'users', uid));
       const joinedLoops: string[] = userSnap.exists()
         ? (userSnap.data().joinedLoops as string[])
         : [];
@@ -67,7 +72,7 @@ export default function HomeScreen() {
       // fetch loop names for display
       const loopNames: Record<string, string> = {};
       for (const loopId of joinedLoops) {
-        const loopSnap = await getDoc(doc(db, 'loops', loopId));
+        const loopSnap = await getLoopDoc(doc(db, 'loops', loopId));
         loopNames[loopId] = loopSnap.exists() ? (loopSnap.data().name as string) : loopId;
       }
 
@@ -105,6 +110,55 @@ export default function HomeScreen() {
         setLoading(false);
       })();
     }, [loadPosts])
+  );
+
+  useEffect(() => {
+    async function loadVotes() {
+      const votes: Record<string, number> = {};
+      await Promise.all(posts.map(async post => {
+        const voteSnap = await getVoteDoc(
+          doc(db, 'loops', post.loopId, 'posts', post.id, 'votes', uid)
+        );
+        votes[post.id] = voteSnap.exists() ? (voteSnap.data().value as number) : 0;
+      }));
+      setUserVotes(votes);
+    }
+    if (posts.length) {
+      loadVotes();
+    }
+  }, [posts, uid]);
+
+  // helper to cast a vote and refresh posts
+  const handleVote = useCallback(
+    async (loopId: string, postId: string, vote: 1 | -1 | 0) => {
+      // Optimistic update for userVotes and posts
+      setUserVotes(prevUV => {
+        const oldVote = prevUV[postId] ?? 0;
+        // Update post counts locally
+        setPosts(prevPosts =>
+          prevPosts.map(p => {
+            if (p.id !== postId) return p;
+            const upChange = (vote === 1 ? 1 : 0) - (oldVote === 1 ? 1 : 0);
+            const downChange =
+              (vote === -1 ? 1 : 0) - (oldVote === -1 ? 1 : 0);
+            return {
+              ...p,
+              upvotes: p.upvotes + upChange,
+              downvotes: p.downvotes + downChange,
+            };
+          })
+        );
+        return { ...prevUV, [postId]: vote };
+      });
+
+      try {
+        await voteOnPost(loopId, postId, uid, vote);
+      } catch (err) {
+        console.warn('handleVote error:', err);
+        // Optionally refresh from server here if the API call fails
+      }
+    },
+    [uid, loadPosts]
   );
 
   // 3) pull-to-refresh
@@ -188,10 +242,37 @@ export default function HomeScreen() {
 
               {/* Meta Row */}
               <View style={styles.metaRow}>
-                <View style={styles.metaItem}>
-                  <Ionicons name="heart-outline" size={16} color={colors.error} />
-                  <Text style={styles.metaText}>{item.karma}</Text>
+                {/* Vote controls */}
+                <View style={styles.voteRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      console.log('Up arrow tapped for', item.id);
+                      handleVote(item.loopId, item.id, userVotes[item.id] === 1 ? 0 : 1);
+                    }}
+                  >
+                    <Ionicons
+                      name="arrow-up-circle"
+                      size={20}
+                      color={userVotes[item.id] === 1 ? colors.accent : colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                  <Text style={styles.voteCount}>
+                    {item.upvotes - item.downvotes}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      console.log('Down arrow tapped for', item.id);
+                      handleVote(item.loopId, item.id, userVotes[item.id] === -1 ? 0 : -1);
+                    }}
+                  >
+                    <Ionicons
+                      name="arrow-down-circle"
+                      size={20}
+                      color={userVotes[item.id] === -1 ? colors.error : colors.textSecondary}
+                    />
+                  </TouchableOpacity>
                 </View>
+                {/* Timestamp */}
                 <View style={[styles.metaItem, { marginLeft: spacing.lg / 2 }]}>
                   <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
                   <Text style={styles.metaText}>{dateStr}</Text>
@@ -267,5 +348,16 @@ const styles = StyleSheet.create({
     marginLeft: spacing.xs / 2,
     color: colors.textSecondary,
     fontSize: typography.sm,
+  },
+
+  voteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  voteCount: {
+    marginHorizontal: spacing.sm,
+    fontSize: typography.md,
+    fontWeight: '500',
+    color: colors.textPrimary,
   },
 });

@@ -6,7 +6,7 @@ export interface Post {
   content: string;
   posterId: string;
   anon: boolean;
-  karma: number;
+  aura: number;
   createdAt: Timestamp;
 }
 
