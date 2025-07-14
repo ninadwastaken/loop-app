@@ -34,6 +34,7 @@ import { Ionicons } from '@expo/vector-icons';
 interface Post {
   id: string;
   loopId: string;
+  loopName: string;
   content: string;
   posterId: string;
   anon: boolean;
@@ -63,6 +64,13 @@ export default function HomeScreen() {
         return;
       }
 
+      // fetch loop names for display
+      const loopNames: Record<string, string> = {};
+      for (const loopId of joinedLoops) {
+        const loopSnap = await getDoc(doc(db, 'loops', loopId));
+        loopNames[loopId] = loopSnap.exists() ? (loopSnap.data().name as string) : loopId;
+      }
+
       // gather posts across loops
       const all: Post[] = [];
       for (const loopId of joinedLoops) {
@@ -72,7 +80,12 @@ export default function HomeScreen() {
         );
         const snap = await getDocs(q);
         snap.forEach((d) =>
-          all.push({ id: d.id, loopId, ...(d.data() as any) })
+          all.push({
+            id: d.id,
+            loopId,
+            loopName: loopNames[loopId],
+            ...(d.data() as any)
+          })
         );
       }
 
@@ -167,7 +180,7 @@ export default function HomeScreen() {
             >
               {/* Loop Label */}
               <View style={styles.tag}>
-                <Text style={styles.tagText}>{item.loopId}</Text>
+                <Text style={styles.tagText}>{item.loopName}</Text>
               </View>
 
               {/* Content */}
@@ -237,7 +250,8 @@ const styles = StyleSheet.create({
 
   content: {
     color: colors.textPrimary,
-    fontSize: typography.md,
+    fontSize: typography.lg,
+    fontWeight: typography.semibold as any,
     marginBottom: spacing.md,
   },
 

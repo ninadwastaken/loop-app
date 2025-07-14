@@ -7,14 +7,15 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ScrollView
+  ScrollView,
+  Modal
 } from 'react-native'
 import { Picker } from '@react-native-picker/picker'
 import { auth, db } from '../../config/firebase'
 import { 
   collection, 
+  addDoc, 
   doc, 
-  setDoc, 
   serverTimestamp, 
   updateDoc, 
   arrayUnion 
@@ -43,6 +44,7 @@ export default function CreateLoopScreen({ navigation }: any) {
   const [color, setColor]         = useState(COLOR_SWATCHES[0])
   const [avatarUrl, setAvatarUrl] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showPicker, setShowPicker] = useState(false)
 
   const handleCreate = async () => {
     if (!name.trim()) return Alert.alert('Name required', 'Please enter a loop name.')
@@ -50,8 +52,7 @@ export default function CreateLoopScreen({ navigation }: any) {
     try {
       // 1) Create new loop doc
       const loopsRef = collection(db, 'loops')
-      const newLoopRef = doc(loopsRef)
-      await setDoc(newLoopRef, {
+      const newLoopRef = await addDoc(loopsRef, {
         name: name.trim(),
         description: description.trim(),
         category,
@@ -98,20 +99,40 @@ export default function CreateLoopScreen({ navigation }: any) {
           onChangeText={setDescription}
           placeholder="A short blurb about your loop"
           multiline
+          placeholderTextColor="#999"
         />
 
         <Text style={styles.label}>Category</Text>
-        <View style={styles.pickerWrapper}>
-          <Picker
-            selectedValue={category}
-            onValueChange={v => setCategory(v)}
-            style={styles.picker}
-          >
-            {CATEGORIES.map(c => (
-              <Picker.Item key={c.value} label={c.label} value={c.value} />
-            ))}
-          </Picker>
-        </View>
+        <TouchableOpacity
+          style={[styles.input, styles.pickerWrapper]}
+          onPress={() => setShowPicker(true)}
+        >
+          <Text style={{ color: colors.textPrimary }}>
+            {CATEGORIES.find(c => c.value === category)?.label}
+          </Text>
+        </TouchableOpacity>
+        <Modal
+          visible={showPicker}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowPicker(false)}
+        >
+          <View style={styles.modalContentFull}>
+            <Picker
+              selectedValue={category}
+              onValueChange={v => {
+                setCategory(v)
+                setShowPicker(false)
+              }}
+              style={styles.picker}
+              itemStyle={{ color: colors.textPrimary }}
+            >
+              {CATEGORIES.map(c => (
+                <Picker.Item key={c.value} label={c.label} value={c.value} />
+              ))}
+            </Picker>
+          </View>
+        </Modal>
 
         <Text style={styles.label}>Accent Color</Text>
         <View style={styles.swatchRow}>
@@ -192,5 +213,11 @@ const styles = StyleSheet.create({
   swatchSelected: {
     borderWidth: 3,
     borderColor: '#fff',
+  },
+  modalContentFull: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    padding: spacing.md,
   },
 })

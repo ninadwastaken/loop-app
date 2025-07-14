@@ -9,6 +9,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -16,10 +17,12 @@ import {
   getDoc,
   doc,
   addDoc,
+  setDoc,
   serverTimestamp,
   getDocs,
   query,
   where,
+  onSnapshot,
 } from 'firebase/firestore'
 import { db, auth } from '../../config/firebase'
 import { Loop } from '../types'
@@ -41,22 +44,26 @@ export default function NewPostScreen() {
   const [content, setContent]   = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // 1️⃣ Load user doc to get `joinedLoops`
+  // 1️⃣ Load user doc to get `joinedLoops` with real-time subscription
   useEffect(() => {
-    ;(async () => {
-      try {
-        const userSnap = await getDoc(doc(db, 'users', uid))
-        if (!userSnap.exists()) {
-          return Alert.alert('Error', 'Your user record was not found.')
+    const userDocRef = doc(db, 'users', uid)
+    const unsubscribe = onSnapshot(
+      userDocRef,
+      snap => {
+        if (!snap.exists()) {
+          Alert.alert('Error', 'Your user record was not found.')
+          return
         }
-        const data = userSnap.data()
+        const data = snap.data()
         const arr = (data.joinedLoops as string[]) || []
         setJoinedLoopIds(arr)
-      } catch (err) {
+      },
+      err => {
         console.warn('Error loading user loops:', err)
         Alert.alert('Error', 'Could not load your joined loops.')
       }
-    })()
+    )
+    return () => unsubscribe()
   }, [uid])
 
   // 2️⃣ Once we have joinedLoopIds, fetch only those loops
@@ -189,6 +196,9 @@ export default function NewPostScreen() {
               ]}
               onPress={() => setSelectedLoop(item.id)}
             >
+              {item.avatarUrl ? (
+                <Image source={{ uri: item.avatarUrl }} style={styles.loopAvatar} />
+              ) : null}
               <Text
                 style={[
                   styles.loopText,
@@ -245,12 +255,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.full,
     marginRight: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   loopSelected: {
     backgroundColor: colors.accent,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   loopUnselected: {
     backgroundColor: colors.surfaceDark,
+    borderWidth: 1,
+    borderColor: colors.surface,
   },
   loopText: {
     fontSize: typography.sm,
@@ -261,6 +277,12 @@ const styles = StyleSheet.create({
   },
   loopTextUnsel: {
     color: colors.white,
+  },
+  loopAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: spacing.sm,
   },
   input: {
     flex: 1,
