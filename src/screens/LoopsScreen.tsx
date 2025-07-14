@@ -1,5 +1,5 @@
 // src/screens/LoopsScreen.tsx
-import React, { useState, useEffect, useMemo, useLayoutEffect, useCallback } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
 import {
   SafeAreaView,
   View,
@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from 'react-native'
-import debounce from 'lodash.debounce'
 import {
   collection,
   onSnapshot,
@@ -33,7 +32,7 @@ import {
 
 export default function LoopsScreen({ navigation }: any) {
   const uid = auth.currentUser!.uid
-  const userRef = doc(db, 'users', uid)
+  const userRef = useMemo(() => doc(db, 'users', uid), [uid])
 
   const [allLoops, setAllLoops] = useState<Loop[]>([])
   const [filteredLoops, setFilteredLoops] = useState<Loop[]>([])
@@ -98,30 +97,27 @@ export default function LoopsScreen({ navigation }: any) {
     }
   }, [userRef])
 
-  //
-  // 3) Debounced search
-  //
-  const debouncedFilter = useMemo(
-    () =>
-      debounce((text: string) => {
-        if (!text) {
-          setFilteredLoops(allLoops)
-          return
-        }
-        const lower = text.toLowerCase()
-        const fil = allLoops.filter(
+  // filter loops whenever `query` or `allLoops` changes
+  useEffect(() => {
+    const lower = query.toLowerCase().trim()
+    if (!lower) {
+      setFilteredLoops(allLoops)
+    } else {
+      setFilteredLoops(
+        allLoops.filter(
           l =>
             l.name.toLowerCase().includes(lower) ||
             (l.description || '').toLowerCase().includes(lower)
         )
-        setFilteredLoops(fil)
-      }, 300),
-    [allLoops]
-  )
+      )
+    }
+  }, [query, allLoops])
 
+  //
+  // 3) Immediate search filtering
+  //
   const onSearchChange = (text: string) => {
     setQuery(text)
-    debouncedFilter(text)
   }
 
   //
@@ -129,12 +125,15 @@ export default function LoopsScreen({ navigation }: any) {
   //
   const toggleJoin = useCallback(
     async (loopId: string) => {
+      const loopRef = doc(db, 'loops', loopId);
       try {
         if (joined.includes(loopId)) {
           await updateDoc(userRef, { joinedLoops: arrayRemove(loopId) })
+          await updateDoc(loopRef, { members: arrayRemove(uid) });
           setJoined(prev => prev.filter(i => i !== loopId))
         } else {
           await updateDoc(userRef, { joinedLoops: arrayUnion(loopId) })
+          await updateDoc(loopRef, { members: arrayUnion(uid) });
           setJoined(prev => [...prev, loopId])
         }
       } catch (err) {
