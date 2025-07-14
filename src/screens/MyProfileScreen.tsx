@@ -10,7 +10,7 @@ import {
   StyleSheet,
 } from 'react-native'
 import { doc, getDoc } from 'firebase/firestore'
-import { auth, db } from '../../firebase'
+import { auth, db } from '../../config/firebase'
 import {
   commonStyles,
   colors,

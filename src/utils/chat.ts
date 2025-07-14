@@ -12,7 +12,7 @@ import {
   orderBy,
   Timestamp,
 } from 'firebase/firestore';
-import { auth, db } from '../../firebase';
+import { auth, db } from '../../config/firebase';
 
 // Thread metadata we’ll surface in the list
 export interface ThreadMeta {

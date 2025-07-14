@@ -16,7 +16,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack'
 import * as ImagePicker from 'expo-image-picker'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { doc, updateDoc, getDoc } from 'firebase/firestore'
-import { auth, db, storage } from '../../firebase'
+import { auth, db, storage } from '../../config/firebase'
 import {
   commonStyles,
   colors,

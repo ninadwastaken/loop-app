@@ -5,7 +5,7 @@ import { createNativeStackNavigator }                  from '@react-navigation/n
 import { createBottomTabNavigator }                    from '@react-navigation/bottom-tabs'
 import { onAuthStateChanged, User }                    from 'firebase/auth'
 import { doc, onSnapshot }                             from 'firebase/firestore'
-import { auth, db }                                    from './firebase'
+import { auth, db }                                    from './config/firebase'
 import usePushToken                                    from './src/hooks/usePushToken'
 import { bootstrapUser }                               from './src/utils/firebaseSetup'
 
@@ -39,6 +39,7 @@ const MainStack = createNativeStackNavigator<MainStackParamList>()
 function TabsNavigator() {
   return (
     <MainTabs.Navigator
+      id={undefined}
       screenOptions={{ headerShown: false }}
     >
       {/* Home tab with custom header */}
@@ -67,7 +68,7 @@ function TabsNavigator() {
 
 function MainApp() {
   return (
-    <MainStack.Navigator screenOptions={{ headerShown: false }}>
+    <MainStack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
       <MainStack.Screen name="Tabs"       component={TabsNavigator} />
 
       <MainStack.Screen
@@ -157,13 +158,13 @@ export default function App() {
   return (
     <NavigationContainer>
       {!user ? (
-        <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+        <AuthStack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
           <AuthStack.Screen name="Signup"    component={SignupScreen}    />
           <AuthStack.Screen name="Login"     component={LoginScreen}     />
           <AuthStack.Screen name="Interests" component={InterestsScreen} />
         </AuthStack.Navigator>
       ) : !profile?.interests?.length ? (
-        <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+        <AuthStack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
           <AuthStack.Screen name="Interests" component={InterestsScreen} />
         </AuthStack.Navigator>
       ) : (

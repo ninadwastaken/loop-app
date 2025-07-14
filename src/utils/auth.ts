@@ -5,7 +5,7 @@ import {
   signOut,
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../../firebase';
+import { auth, db } from '../../config/firebase';
 
 export const signup = async (
   email: string,

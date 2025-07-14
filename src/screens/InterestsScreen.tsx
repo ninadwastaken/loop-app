@@ -13,7 +13,7 @@ import {
   arrayUnion,
   getDoc,
 } from 'firebase/firestore';
-import { db, auth } from '../../firebase';
+import { db, auth } from '../../config/firebase';
 import {
   colors,
   typography,

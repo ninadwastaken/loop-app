@@ -21,3 +21,8 @@ dist/
 build/
 *.tmp
 node_modules/
+
+# api keys
+config/
+
+

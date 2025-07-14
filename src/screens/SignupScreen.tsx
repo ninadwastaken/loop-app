@@ -16,7 +16,7 @@ import {
 
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../../firebase';
+import { auth, db } from '../../config/firebase';
 
 // ← Use your shared navigator props so TS knows "Interests" is valid
 import type { SignupScreenProps } from '../types/navigation';

@@ -10,7 +10,7 @@ import {
   ScrollView
 } from 'react-native'
 import { Picker } from '@react-native-picker/picker'
-import { auth, db } from '../../firebase'
+import { auth, db } from '../../config/firebase'
 import { 
   collection, 
   doc, 

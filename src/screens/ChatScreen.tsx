@@ -18,7 +18,7 @@ import {
   doc,
   getDoc,
 } from 'firebase/firestore'
-import { db, auth } from '../../firebase'
+import { db, auth } from '../../config/firebase'
 import {
   commonStyles,
   colors,
