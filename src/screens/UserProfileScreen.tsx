@@ -39,7 +39,7 @@ type Props = NativeStackScreenProps<MainStackParamList, 'UserProfile'>
 interface Post {
   id: string
   content: string
-  karma: number
+  aura: number
   createdAt: any
 }
 
@@ -80,7 +80,7 @@ export default function UserProfileScreen({ route }: Props) {
   const loadPosts = useCallback(async () => {
     try {
       const q = query(
-        collection(db, 'users', userId, 'posts'),
+        collection(db, 'users', userId, 'userPosts'),
         orderBy('createdAt', 'desc')
       )
       const snap = await getDocs(q)
@@ -148,7 +148,7 @@ export default function UserProfileScreen({ route }: Props) {
     username,
     bio,
     profilePicUrl,
-    karma = 0,
+    aura = 0,
     streak = 0,
   } = profile
 
@@ -194,8 +194,8 @@ export default function UserProfileScreen({ route }: Props) {
       {/* Stats */}
       <View style={styles.statsRow}>
         <View style={styles.stat}>
-          <Text style={styles.statValue}>{karma}</Text>
-          <Text style={styles.statLabel}>Karma</Text>
+          <Text style={styles.statValue}>{aura}</Text>
+          <Text style={styles.statLabel}>Aura</Text>
         </View>
         <View style={styles.stat}>
           <Text style={styles.statValue}>{streak}</Text>
@@ -218,7 +218,7 @@ export default function UserProfileScreen({ route }: Props) {
           <View style={[styles.postCard, shadows.sm]}>
             <Text style={styles.postContent}>{item.content}</Text>
             <Text style={styles.postMeta}>
-              ❤️ {item.karma} •{' '}
+              {item.loopName ? `in ${item.loopName} • ` : ''}
               {item.createdAt?.toDate().toLocaleDateString()}
             </Text>
           </View>
