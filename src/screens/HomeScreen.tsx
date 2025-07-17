@@ -123,10 +123,11 @@ export default function HomeScreen() {
       }));
       setUserVotes(votes);
     }
-    if (posts.length) {
+    // Only load votes on initial load or manual refresh
+    if (loading) {
       loadVotes();
     }
-  }, [posts, uid]);
+  }, [loading, uid]);
 
   // helper to cast a vote and refresh posts
   const handleVote = useCallback(
