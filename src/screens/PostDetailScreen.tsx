@@ -39,7 +39,7 @@ import {
   borderRadius,
   commonStyles,
 } from '../utils/styles'
-import { voteOnPost } from '../utils/voteService'
+import { voteOnPost, voteOnReply } from '../utils/voteService'
 import Ionicons from '@expo/vector-icons/Ionicons'
 
 // ──────────────────────────
@@ -51,7 +51,8 @@ interface ThreadedReply {
   username: string
   content: string
   anon: boolean
-  karma: number
+  upvotes: number
+  downvotes: number
   createdAt: any
   parentId: string | null
   children: ThreadedReply[]
@@ -62,7 +63,8 @@ interface PostData {
   posterId: string
   posterName: string
   anon: boolean
-  karma: number
+  upvotes: number
+  downvotes: number
   createdAt: any
   loopId: string
   loopName: string
@@ -90,20 +92,7 @@ function buildTree(list: ThreadedReply[]): ThreadedReply[] {
   return roots
 }
 
-// Recursively adjust replies’ karma
-function adjustReplies(
-  list: ThreadedReply[],
-  targetId: string,
-  delta: number
-): ThreadedReply[] {
-  return list.map(r => {
-    const children = adjustReplies(r.children, targetId, delta)
-    if (r.id === targetId) {
-      return { ...r, karma: r.karma + delta, children }
-    }
-    return { ...r, children }
-  })
-}
+
 
 // Fetch display name / username by UID
 async function fetchUsername(uid: string) {
@@ -140,6 +129,8 @@ export default function PostDetailScreen({ route, navigation }: any) {
     null
   )
   const [submitting, setSubmitting] = useState(false)
+  // Voting state: prevent overlapping votes per post/reply
+  const [voting, setVoting] = useState<Record<string, boolean>>({})
 
   // Toggle upvote/downvote (accepts voteValue: 1 for up, -1 for down)
   const toggleVote = async (
@@ -147,6 +138,9 @@ export default function PostDetailScreen({ route, navigation }: any) {
     targetId: string,
     voteValue: 1 | -1
   ) => {
+    // Prevent double-voting on same item
+    if (voting[targetId]) return
+    setVoting(v => ({ ...v, [targetId]: true }))
     // Determine loopId from parentPath ("loops/{loopId}/...")
     const [, loopId] = parentPath.split('/')
     const prevVote = localVotes[targetId] ?? 0
@@ -156,51 +150,36 @@ export default function PostDetailScreen({ route, navigation }: any) {
     setLocalVotes(p => ({ ...p, [targetId]: newVote }))
     if (targetId === postId) {
       setPost(p =>
-        p ? { ...p, karma: p.karma + (newVote - prevVote) } : p
+        p
+          ? {
+              ...p,
+              upvotes:
+                p.upvotes +
+                ((newVote === 1 ? 1 : 0) - (prevVote === 1 ? 1 : 0)),
+              downvotes:
+                p.downvotes +
+                ((newVote === -1 ? 1 : 0) - (prevVote === -1 ? 1 : 0)),
+            }
+          : p
       )
-    } else {
-      setTree(t => adjustReplies(t, targetId, newVote - prevVote))
     }
+    // Replies are updated on reload; skip optimistic adjustment for replies here.
 
     try {
-      // For replies, parentPath includes replies path but voteService only needs loopId and post/reply ID.
-      // We'll treat targetId as the postId for top-level or replyId for replies.
       if (parentPath.includes('/replies/')) {
-        // write or delete vote doc
-        const voteRef = doc(
-          db,
-          parentPath,
-          'votes',
-          uid
-        )
-        const replyRef = doc(db, parentPath)
-        if (newVote === 0) {
-          await deleteDoc(voteRef)
-        } else {
-          await setDoc(voteRef, { value: newVote })
-        }
-        // update reply upvotes/downvotes
-        const upChange = (newVote === 1 ? 1 : 0) - (prevVote === 1 ? 1 : 0)
-        const downChange = (newVote === -1 ? 1 : 0) - (prevVote === -1 ? 1 : 0)
-        await updateDoc(replyRef, {
-          upvotes: increment(upChange),
-          downvotes: increment(downChange),
-        })
+        // Use the new utility for replies!
+        const pathParts = parentPath.split('/')
+        const replyId = pathParts[pathParts.length - 1]
+        await voteOnReply(loopId, postId, replyId, uid, newVote)
       } else {
         await voteOnPost(loopId, targetId, uid, newVote)
       }
     } catch (err) {
       console.warn('Vote error:', err)
-      Alert.alert('Error', 'Could not update vote.')
-      // rollback optimistic update
-      setLocalVotes(p => ({ ...p, [targetId]: prevVote }))
-      if (targetId === postId) {
-        setPost(p =>
-          p ? { ...p, karma: p.karma - (newVote - prevVote) } : p
-        )
-      } else {
-        setTree(t => adjustReplies(t, targetId, prevVote - newVote))
-      }
+      // Optionally: show a non-blocking message to the user
+      // Don't roll back UI state; let the optimistic update stand
+    } finally {
+      setVoting(v => ({ ...v, [targetId]: false }))
     }
   }
 
@@ -228,28 +207,31 @@ export default function PostDetailScreen({ route, navigation }: any) {
         posterId: pd.posterId,
         posterName,
         anon: pd.anon,
-        karma: pd.karma,
+        upvotes: pd.upvotes ?? 0,
+        downvotes: pd.downvotes ?? 0,
         createdAt: pd.createdAt,
         loopId,
         loopName,
       })
 
-      // record your vote on the post
+      // Only set the initial vote value if localVotes[postId] is still undefined
       const pvSnap = await getDocs(
         collection(db, 'loops', loopId, 'posts', postId, 'votes')
       )
-      // If user has voted, get the value (1 or -1), else 0
-      let postVoteValue = 0
-      for (let d of pvSnap.docs) {
-        if (d.id === uid) {
-          const v = d.data().value
-          postVoteValue = typeof v === 'number' ? v : 1
+      let shouldSetVote = localVotes[postId] === undefined
+      if (shouldSetVote) {
+        let postVoteValue = 0
+        for (let d of pvSnap.docs) {
+          if (d.id === uid) {
+            const v = d.data().value
+            postVoteValue = typeof v === 'number' ? v : 1
+          }
         }
+        setLocalVotes(p => ({
+          ...p,
+          [postId]: postVoteValue,
+        }))
       }
-      setLocalVotes(p => ({
-        ...p,
-        [postId]: postVoteValue,
-      }))
 
       // 3) Fetch all replies (flat)
       const repSnap = await getDocs(
@@ -282,17 +264,20 @@ export default function PostDetailScreen({ route, navigation }: any) {
             replyVoteValue = typeof val === 'number' ? val : 1
           }
         }
-        setLocalVotes(p => ({
-          ...p,
-          [d.id]: replyVoteValue,
-        }))
+        if (localVotes[d.id] === undefined) {
+          setLocalVotes(p => ({
+            ...p,
+            [d.id]: replyVoteValue,
+          }))
+        }
         flat.push({
           id: d.id,
           replierId: data.replierId,
           username: uname,
           content: data.content,
           anon: data.anon,
-          karma: data.karma,
+          upvotes: data.upvotes ?? 0,
+          downvotes: data.downvotes ?? 0,
           createdAt: data.createdAt,
           parentId: data.parentId ?? null,
           children: [],
@@ -339,7 +324,6 @@ export default function PostDetailScreen({ route, navigation }: any) {
           replierId: uid,
           content: commentText.trim(),
           anon: false,
-          karma: 0,
           createdAt: serverTimestamp(),
           parentId: replyTo?.id ?? null,
         }
@@ -385,6 +369,7 @@ export default function PostDetailScreen({ route, navigation }: any) {
               onPress={() =>
                 toggleVote(`loops/${loopId}/posts/${postId}`, postId, 1)
               }
+              disabled={voting[postId]}
             >
               <Ionicons
                 name="arrow-up-circle"
@@ -392,12 +377,17 @@ export default function PostDetailScreen({ route, navigation }: any) {
                 color={localVotes[postId] === 1 ? colors.accent : colors.textTertiary}
               />
             </TouchableOpacity>
-            <Text style={styles.voteCount}>{p.karma}</Text>
+            <Text style={styles.voteCount}>
+              {post?.upvotes !== undefined && post?.downvotes !== undefined
+                ? post.upvotes - post.downvotes
+                : (p.upvotes - p.downvotes)}
+            </Text>
             <TouchableOpacity
               onPress={() =>
                 toggleVote(`loops/${loopId}/posts/${postId}`, postId, -1)
               }
               style={{ marginLeft: spacing.sm }}
+              disabled={voting[postId]}
             >
               <Ionicons
                 name="arrow-down-circle"
@@ -434,6 +424,7 @@ export default function PostDetailScreen({ route, navigation }: any) {
                     1
                   )
                 }
+                disabled={voting[r.id]}
               >
                 <Ionicons
                   name="arrow-up-circle"
@@ -441,7 +432,7 @@ export default function PostDetailScreen({ route, navigation }: any) {
                   color={localVotes[r.id] === 1 ? colors.accent : colors.textTertiary}
                 />
               </TouchableOpacity>
-              <Text style={styles.voteCount}>{r.karma}</Text>
+              <Text style={styles.voteCount}>{(r.upvotes - r.downvotes)}</Text>
               <TouchableOpacity
                 onPress={() =>
                   toggleVote(
@@ -451,6 +442,7 @@ export default function PostDetailScreen({ route, navigation }: any) {
                   )
                 }
                 style={{ marginLeft: spacing.sm }}
+                disabled={voting[r.id]}
               >
                 <Ionicons
                   name="arrow-down-circle"
