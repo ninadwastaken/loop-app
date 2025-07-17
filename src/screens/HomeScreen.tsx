@@ -19,6 +19,9 @@ import {
   orderBy,
   Timestamp,
   getDoc as getVoteDoc,
+  collectionGroup,
+  limit,
+  where
 } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import {
@@ -51,6 +54,7 @@ export default function HomeScreen() {
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefresh] = useState(false);
   const [userVotes, setUserVotes] = useState<Record<string, number>>({});
+  const [voting, setVoting] = useState<Record<string, boolean>>({})
 
   const uid = auth.currentUser?.uid!;
   const nav = useNavigation<any>();
@@ -69,29 +73,22 @@ export default function HomeScreen() {
         return;
       }
 
-      // fetch loop names for display
-      const loopNames: Record<string, string> = {};
-      for (const loopId of joinedLoops) {
-        const loopSnap = await getLoopDoc(doc(db, 'loops', loopId));
-        loopNames[loopId] = loopSnap.exists() ? (loopSnap.data().name as string) : loopId;
-      }
-
-      // gather posts across loops
-      const all: Post[] = [];
-      for (const loopId of joinedLoops) {
-        const q    = query(
-          collection(db, 'loops', loopId, 'posts'),
-          orderBy('createdAt', 'desc')
+      // Firestore limits 'in' queries to 10 items, so chunk if needed
+      const chunkSize = 10;
+      let all: Post[] = [];
+      for (let i = 0; i < joinedLoops.length; i += chunkSize) {
+        const chunk = joinedLoops.slice(i, i + chunkSize);
+        const q = query(
+          collectionGroup(db, 'posts'),
+          where('loopId', 'in', chunk),
+          orderBy('createdAt', 'desc'),
+          limit(30)
         );
         const snap = await getDocs(q);
-        snap.forEach((d) =>
-          all.push({
-            id: d.id,
-            loopId,
-            loopName: loopNames[loopId],
-            ...(d.data() as any)
-          })
-        );
+        snap.forEach(d => all.push({
+          id: d.id,
+          ...(d.data() as any)
+        }));
       }
 
       // sort newest-first
@@ -132,10 +129,12 @@ export default function HomeScreen() {
   // helper to cast a vote and refresh posts
   const handleVote = useCallback(
     async (loopId: string, postId: string, vote: 1 | -1 | 0) => {
+      if (voting[postId]) return;
+      setVoting(v => ({ ...v, [postId]: true }));
+
       // Optimistic update for userVotes and posts
       setUserVotes(prevUV => {
         const oldVote = prevUV[postId] ?? 0;
-        // Update post counts locally
         setPosts(prevPosts =>
           prevPosts.map(p => {
             if (p.id !== postId) return p;
@@ -156,10 +155,12 @@ export default function HomeScreen() {
         await voteOnPost(loopId, postId, uid, vote);
       } catch (err) {
         console.warn('handleVote error:', err);
-        // Optionally refresh from server here if the API call fails
+        // Optionally handle error
+      } finally {
+        setVoting(v => ({ ...v, [postId]: false }));
       }
     },
-    [uid, loadPosts]
+    [uid, loadPosts, voting]
   );
 
   // 3) pull-to-refresh
@@ -250,6 +251,7 @@ export default function HomeScreen() {
                       console.log('Up arrow tapped for', item.id);
                       handleVote(item.loopId, item.id, userVotes[item.id] === 1 ? 0 : 1);
                     }}
+                    disabled={voting[item.id]}
                   >
                     <Ionicons
                       name="arrow-up-circle"
@@ -265,6 +267,7 @@ export default function HomeScreen() {
                       console.log('Down arrow tapped for', item.id);
                       handleVote(item.loopId, item.id, userVotes[item.id] === -1 ? 0 : -1);
                     }}
+                    disabled={voting[item.id]}
                   >
                     <Ionicons
                       name="arrow-down-circle"

@@ -112,29 +112,38 @@ export default function NewPostScreen() {
     try {
       // 1) Create post under loops/{loopId}/posts
       const loopPostsRef = collection(db, 'loops', selectedLoop, 'posts')
+      const selectedLoopObj = loops.find(l => l.id === selectedLoop)
+      const loopName = selectedLoopObj ? selectedLoopObj.name : ''
       const newPostRef = await addDoc(loopPostsRef, {
         content: content.trim(),
         posterId: uid,
         anon: false,
-        karma: 0,
+        upvotes: 0,
+        downvotes: 0,
+        loopId: selectedLoop,
+        loopName,
+        score: 0, // (Optional: will be updated for trending)
         createdAt: serverTimestamp(),
       })
 
-      // 2) Mirror into users/{uid}/posts/{postId}
+      // 2) Mirror into users/{uid}/userPosts/{postId}
       const userPostsRef = doc(
         db,
         'users',
         uid,
-        'posts',
+        'userPosts',
         newPostRef.id
       )
       await setDoc(userPostsRef, {
         loopId: selectedLoop,
+        loopName,
         postId: newPostRef.id,
         content: content.trim(),
         posterId: uid,
         anon: false,
-        karma: 0,
+        upvotes: 0,
+        downvotes: 0,
+        score: 0,
         createdAt: serverTimestamp(),
       })
 
