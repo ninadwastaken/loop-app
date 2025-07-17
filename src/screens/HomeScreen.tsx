@@ -21,7 +21,8 @@ import {
   getDoc as getVoteDoc,
   collectionGroup,
   limit,
-  where
+  where,
+  startAfter,
 } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import {
@@ -57,11 +58,25 @@ export default function HomeScreen() {
   const [voting, setVoting] = useState<Record<string, boolean>>({})
   const [feedType, setFeedType] = useState<'trending' | 'recent' | 'explore'>('recent');
 
+  const [lastDoc, setLastDoc] = useState<any>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
+  const [allLoopIds, setAllLoopIds] = useState<string[]>([]);
+
   const uid = auth.currentUser?.uid!;
   const nav = useNavigation<any>();
 
+  useEffect(() => {
+    async function fetchAllLoops() {
+      const snap = await getDocs(collection(db, 'loops'));
+      setAllLoopIds(snap.docs.map(d => d.id));
+    }
+    fetchAllLoops();
+  }, []);
+
   // 1) Load posts helper
-  const loadPosts = useCallback(async () => {
+  const loadPosts = useCallback(async (loadMore = false) => {
     try {
       // fetch joined loops
       const userSnap = await getLoopDoc(doc(db, 'users', uid));
@@ -70,13 +85,18 @@ export default function HomeScreen() {
         : [];
 
       if (!joinedLoops.length) {
-        setPosts([]);
+        if (loadMore) {
+          setHasMore(false);
+        } else {
+          setPosts([]);
+        }
         return;
       }
 
       // Firestore limits 'in' queries to 10 items, so chunk if needed
       const chunkSize = 10;
       let all: Post[] = [];
+      let lastFetchedDoc = null;
       for (let i = 0; i < joinedLoops.length; i += chunkSize) {
         const chunk = joinedLoops.slice(i, i + chunkSize);
         let q;
@@ -85,25 +105,42 @@ export default function HomeScreen() {
             collectionGroup(db, 'posts'),
             where('loopId', 'in', chunk),
             orderBy('createdAt', 'desc'),
-            limit(30)
+            ...(loadMore && lastDoc ? [startAfter(lastDoc)] : []),
+            limit(15)
           );
         } else if (feedType === 'trending') {
           q = query(
             collectionGroup(db, 'posts'),
             where('loopId', 'in', chunk),
             orderBy('score', 'desc'),
-            limit(30)
+            ...(loadMore && lastDoc ? [startAfter(lastDoc)] : []),
+            limit(15)
           );
         } else if (feedType === 'explore') {
-          // Try trending posts from loops user hasn't joined
-          q = query(
-            collectionGroup(db, 'posts'),
-            where('loopId', 'not-in', chunk),
-            orderBy('score', 'desc'),
-            limit(30)
-          );
+          // Get up to 10 loops the user has NOT joined
+          const notJoinedLoops = allLoopIds.filter(id => !joinedLoops.includes(id));
+          if (notJoinedLoops.length > 0) {
+            q = query(
+              collectionGroup(db, 'posts'),
+              where('loopId', 'in', notJoinedLoops.slice(0, 10)), // Firestore allows max 10
+              orderBy('score', 'desc'),
+              ...(loadMore && lastDoc ? [startAfter(lastDoc)] : []),
+              limit(15)
+            );
+          } else {
+            // Fallback: show trending from all loops
+            q = query(
+              collectionGroup(db, 'posts'),
+              orderBy('score', 'desc'),
+              ...(loadMore && lastDoc ? [startAfter(lastDoc)] : []),
+              limit(15)
+            );
+          }
         }
         const snap = await getDocs(q);
+        if (!lastFetchedDoc && !snap.empty) {
+          lastFetchedDoc = snap.docs[snap.docs.length - 1];
+        }
         snap.forEach(d => all.push({
           id: d.id,
           ...(d.data() as any)
@@ -115,9 +152,13 @@ export default function HomeScreen() {
         const q2 = query(
           collectionGroup(db, 'posts'),
           orderBy('score', 'desc'),
-          limit(30)
+          ...(loadMore && lastDoc ? [startAfter(lastDoc)] : []),
+          limit(15)
         );
         const snap2 = await getDocs(q2);
+        if (!lastFetchedDoc && !snap2.empty) {
+          lastFetchedDoc = snap2.docs[snap2.docs.length - 1];
+        }
         snap2.forEach(d => all.push({
           id: d.id,
           ...(d.data() as any)
@@ -138,11 +179,17 @@ export default function HomeScreen() {
         return true;
       });
 
-      setPosts(all);
+      if (loadMore) {
+        setPosts(prev => [...prev, ...all]);
+      } else {
+        setPosts(all);
+      }
+      setLastDoc(lastFetchedDoc);
+      setHasMore(all.length === 15); // true if loaded full page
     } catch (err) {
       console.warn('Error loading home posts:', err);
     }
-  }, [uid, feedType]);
+  }, [uid, feedType, lastDoc, allLoopIds]);
 
   // 2) on mount & on focus (so header button can refresh)
   useFocusEffect(
@@ -155,6 +202,11 @@ export default function HomeScreen() {
   );
 
   // Reload feed whenever tab changes
+  useEffect(() => {
+    setLastDoc(null);
+    setHasMore(true);
+  }, [feedType]);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -219,6 +271,8 @@ export default function HomeScreen() {
 
   // 3) pull-to-refresh
   const onRefresh = async () => {
+    setLastDoc(null);
+    setHasMore(true);
     setRefresh(true);
     await loadPosts();
     setRefresh(false);
@@ -293,6 +347,14 @@ export default function HomeScreen() {
         contentContainerStyle={styles.list}
         refreshing={refreshing}
         onRefresh={onRefresh}
+        onEndReached={() => {
+          if (hasMore && !loadingMore) {
+            setLoadingMore(true);
+            loadPosts(true).finally(() => setLoadingMore(false));
+          }
+        }}
+        onEndReachedThreshold={0.6}
+        ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={colors.accent} /> : null}
         renderItem={({ item }) => {
           const dateStr = item.createdAt
             .toDate()
