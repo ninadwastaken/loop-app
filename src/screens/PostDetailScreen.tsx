@@ -92,6 +92,26 @@ function buildTree(list: ThreadedReply[]): ThreadedReply[] {
   return roots
 }
 
+// Recursively update a reply node in the tree with new vote counts
+function recursivelyUpdateReply(targetId: string, newVote: number, prevVote: number) {
+  return function updater(r: ThreadedReply): ThreadedReply {
+    if (r.id === targetId) {
+      return {
+        ...r,
+        upvotes:
+          r.upvotes + ((newVote === 1 ? 1 : 0) - (prevVote === 1 ? 1 : 0)),
+        downvotes:
+          r.downvotes + ((newVote === -1 ? 1 : 0) - (prevVote === -1 ? 1 : 0)),
+        children: r.children.map(updater),
+      }
+    }
+    return {
+      ...r,
+      children: r.children.map(updater),
+    }
+  }
+}
+
 
 
 // Fetch display name / username by UID
@@ -163,7 +183,31 @@ export default function PostDetailScreen({ route, navigation }: any) {
           : p
       )
     }
-    // Replies are updated on reload; skip optimistic adjustment for replies here.
+    else {
+      // Optimistically update replies in both tree and flatListData
+      setTree(oldTree =>
+        oldTree.map(recursivelyUpdateReply(targetId, newVote, prevVote))
+      )
+      setFlatListData(arr =>
+        arr.map(item => {
+          if (item.type === 'reply' && item.data.id === targetId) {
+            return {
+              ...item,
+              data: {
+                ...item.data,
+                upvotes:
+                  item.data.upvotes +
+                  ((newVote === 1 ? 1 : 0) - (prevVote === 1 ? 1 : 0)),
+                downvotes:
+                  item.data.downvotes +
+                  ((newVote === -1 ? 1 : 0) - (prevVote === -1 ? 1 : 0)),
+              },
+            }
+          }
+          return item
+        })
+      )
+    }
 
     try {
       if (parentPath.includes('/replies/')) {
