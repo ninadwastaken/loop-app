@@ -55,6 +55,7 @@ export default function HomeScreen() {
   const [refreshing, setRefresh] = useState(false);
   const [userVotes, setUserVotes] = useState<Record<string, number>>({});
   const [voting, setVoting] = useState<Record<string, boolean>>({})
+  const [feedType, setFeedType] = useState<'trending' | 'recent' | 'explore'>('recent');
 
   const uid = auth.currentUser?.uid!;
   const nav = useNavigation<any>();
@@ -78,12 +79,30 @@ export default function HomeScreen() {
       let all: Post[] = [];
       for (let i = 0; i < joinedLoops.length; i += chunkSize) {
         const chunk = joinedLoops.slice(i, i + chunkSize);
-        const q = query(
-          collectionGroup(db, 'posts'),
-          where('loopId', 'in', chunk),
-          orderBy('createdAt', 'desc'),
-          limit(30)
-        );
+        let q;
+        if (feedType === 'recent') {
+          q = query(
+            collectionGroup(db, 'posts'),
+            where('loopId', 'in', chunk),
+            orderBy('createdAt', 'desc'),
+            limit(30)
+          );
+        } else if (feedType === 'trending') {
+          q = query(
+            collectionGroup(db, 'posts'),
+            where('loopId', 'in', chunk),
+            orderBy('score', 'desc'),
+            limit(30)
+          );
+        } else if (feedType === 'explore') {
+          // Try trending posts from loops user hasn't joined
+          q = query(
+            collectionGroup(db, 'posts'),
+            where('loopId', 'not-in', chunk),
+            orderBy('score', 'desc'),
+            limit(30)
+          );
+        }
         const snap = await getDocs(q);
         snap.forEach(d => all.push({
           id: d.id,
@@ -91,13 +110,39 @@ export default function HomeScreen() {
         }));
       }
 
-      // sort newest-first
-      all.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+      // Explore fallback: if no posts from not-joined loops, show all trending posts
+      if (feedType === 'explore' && all.length === 0) {
+        const q2 = query(
+          collectionGroup(db, 'posts'),
+          orderBy('score', 'desc'),
+          limit(30)
+        );
+        const snap2 = await getDocs(q2);
+        snap2.forEach(d => all.push({
+          id: d.id,
+          ...(d.data() as any)
+        }));
+      }
+
+      if (feedType === 'recent') {
+        // sort newest-first only for recent
+        all.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
+      }
+      // For trending/explore, leave as returned by Firestore (ordered by score)
+
+      // Deduplicate by post id (important for collectionGroup chunking)
+      const seen = new Set();
+      all = all.filter(post => {
+        if (seen.has(post.id)) return false;
+        seen.add(post.id);
+        return true;
+      });
+
       setPosts(all);
     } catch (err) {
       console.warn('Error loading home posts:', err);
     }
-  }, [uid]);
+  }, [uid, feedType]);
 
   // 2) on mount & on focus (so header button can refresh)
   useFocusEffect(
@@ -108,6 +153,15 @@ export default function HomeScreen() {
       })();
     }, [loadPosts])
   );
+
+  // Reload feed whenever tab changes
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      await loadPosts();
+      setLoading(false);
+    })();
+  }, [feedType]);
 
   useEffect(() => {
     async function loadVotes() {
@@ -192,7 +246,7 @@ export default function HomeScreen() {
   // 5) loading / empty states
   if (loading) {
     return (
-      <SafeAreaView style={commonStyles.centerContent}>
+      <SafeAreaView style={[commonStyles.centerContent, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.accent} />
       </SafeAreaView>
     );
@@ -200,9 +254,11 @@ export default function HomeScreen() {
 
   if (!posts.length) {
     return (
-      <SafeAreaView style={commonStyles.centerContent}>
+      <SafeAreaView style={[commonStyles.centerContent, { backgroundColor: colors.background }]}>
         <Text style={styles.emptyText}>
-          no posts yet. join some loops or add a post!
+          {feedType === 'explore'
+            ? "Nothing to explore! You're in every loop or there are no hot posts yet."
+            : 'no posts yet. join some loops or add a post!'}
         </Text>
       </SafeAreaView>
     );
@@ -210,7 +266,27 @@ export default function HomeScreen() {
 
   // 6) render list
   return (
-    <SafeAreaView style={commonStyles.container}>
+    <SafeAreaView style={[commonStyles.container, { backgroundColor: colors.background }]}>
+      <View style={{ flexDirection: 'row', marginTop: 8, marginBottom: 10, alignSelf: 'center' }}>
+        {['Trending', 'Recent', 'Explore'].map(type => (
+          <TouchableOpacity
+            key={type}
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              backgroundColor: feedType === type.toLowerCase() ? colors.accent : colors.surface,
+              borderRadius: 24,
+              marginRight: 8,
+            }}
+            onPress={() => setFeedType(type.toLowerCase() as any)}
+          >
+            <Text style={{
+              color: feedType === type.toLowerCase() ? colors.background : colors.textSecondary,
+              fontWeight: 'bold'
+            }}>{type}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
       <FlatList
         data={posts}
         keyExtractor={(i) => i.id}

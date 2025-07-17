@@ -1,6 +1,7 @@
 // src/utils/voteService.ts
 import { db } from '../../config/firebase'
 import { doc, getDoc, setDoc, deleteDoc, updateDoc, increment } from 'firebase/firestore'
+import { Timestamp } from 'firebase/firestore';
 
 /**
  * Casts a vote (1 = upvote, -1 = downvote, 0 = undo)
@@ -63,6 +64,15 @@ export async function voteOnPost(
     upvotes: increment(upChange),
     downvotes: increment(downChange),
   })
+  // Recalculate trending score
+  const latestSnap = await getDoc(postRef);
+  const postData = latestSnap.data();
+  const upvotes = postData?.upvotes || 0;
+  const downvotes = postData?.downvotes || 0;
+  const createdAt = postData?.createdAt instanceof Timestamp ? postData.createdAt : Timestamp.now();
+  const hoursSincePost = (Date.now() - createdAt.toMillis()) / (1000 * 60 * 60);
+  const score = (upvotes - downvotes) / Math.pow(hoursSincePost + 2, 1.5);
+  await updateDoc(postRef, { score });
 
   // Update author aura
   const authorUid = postSnap.data().createdBy as string
