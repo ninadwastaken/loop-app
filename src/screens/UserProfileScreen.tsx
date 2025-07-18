@@ -41,6 +41,8 @@ interface Post {
   content: string
   aura: number
   createdAt: any
+  loopName?: string
+  loopId?: string
 }
 
 export default function UserProfileScreen({ route }: Props) {

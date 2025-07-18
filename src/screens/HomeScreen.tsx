@@ -99,7 +99,7 @@ export default function HomeScreen() {
       let lastFetchedDoc = null;
       for (let i = 0; i < joinedLoops.length; i += chunkSize) {
         const chunk = joinedLoops.slice(i, i + chunkSize);
-        let q;
+        let q: ReturnType<typeof query> | undefined;
         if (feedType === 'recent') {
           q = query(
             collectionGroup(db, 'posts'),
@@ -137,6 +137,7 @@ export default function HomeScreen() {
             );
           }
         }
+        if (!q) continue;
         const snap = await getDocs(q);
         if (!lastFetchedDoc && !snap.empty) {
           lastFetchedDoc = snap.docs[snap.docs.length - 1];
@@ -155,6 +156,7 @@ export default function HomeScreen() {
           ...(loadMore && lastDoc ? [startAfter(lastDoc)] : []),
           limit(15)
         );
+        if (!q2) return;
         const snap2 = await getDocs(q2);
         if (!lastFetchedDoc && !snap2.empty) {
           lastFetchedDoc = snap2.docs[snap2.docs.length - 1];
