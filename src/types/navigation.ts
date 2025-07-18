@@ -16,6 +16,18 @@ export type AuthStackParamList = {
 }
 
 /**
+ * OnboardingStackParamList
+ * — screens in your onboarding flow
+ */
+export type OnboardingStackParamList = {
+  Signup: undefined;
+  CodeInput: {email: string}; // email passed from OnboardingSignupScreen
+  WelcomeCarousel: undefined;
+  ProfileSetup: undefined;
+  LoopSelect: undefined;
+}
+
+/**
  * MainTabParamList
  * — bottom tabs once the user is signed in
  */
@@ -49,6 +61,13 @@ export type MainStackParamList = {
 export type LoginScreenProps     = NativeStackScreenProps<AuthStackParamList, 'Login'>
 export type SignupScreenProps    = NativeStackScreenProps<AuthStackParamList, 'Signup'>
 export type InterestsScreenProps = NativeStackScreenProps<AuthStackParamList, 'Interests'>
+
+// Onboarding screens
+export type OnboardingSignupScreenProps         = NativeStackScreenProps<OnboardingStackParamList, 'Signup'>;
+export type CodeInputScreenProps      = NativeStackScreenProps<OnboardingStackParamList, 'CodeInput'>;
+export type WelcomeCarouselScreenProps= NativeStackScreenProps<OnboardingStackParamList, 'WelcomeCarousel'>;
+export type ProfileSetupScreenProps   = NativeStackScreenProps<OnboardingStackParamList, 'ProfileSetup'>;
+export type LoopSelectScreenProps     = NativeStackScreenProps<OnboardingStackParamList, 'LoopSelect'>;
 
 // Bottom‐tab screens
 export type HomeScreenProps    = BottomTabScreenProps<MainTabParamList, 'Home'>

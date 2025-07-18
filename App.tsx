@@ -12,6 +12,7 @@ import { bootstrapUser }                               from './src/utils/firebas
 import LoginScreen            from './src/screens/LoginScreen'
 import SignupScreen           from './src/screens/SignupScreen'
 import InterestsScreen        from './src/screens/InterestsScreen'
+import OnboardingStack        from './src/navigation/OnboardingStack'
 import HomeScreen             from './src/screens/HomeScreen'
 import LoopsScreen            from './src/screens/LoopsScreen'
 import CreateLoopScreen       from './src/screens/CreateLoopScreen'   // newly added
@@ -157,16 +158,8 @@ export default function App() {
   // 4) Branch between Auth flows and MainApp
   return (
     <NavigationContainer>
-      {!user ? (
-        <AuthStack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
-          <AuthStack.Screen name="Signup"    component={SignupScreen}    />
-          <AuthStack.Screen name="Login"     component={LoginScreen}     />
-          <AuthStack.Screen name="Interests" component={InterestsScreen} />
-        </AuthStack.Navigator>
-      ) : !profile?.interests?.length ? (
-        <AuthStack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
-          <AuthStack.Screen name="Interests" component={InterestsScreen} />
-        </AuthStack.Navigator>
+      {!user || !profile?.onboarded ? (
+        <OnboardingStack />
       ) : (
         <MainApp />
       )}

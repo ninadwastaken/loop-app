@@ -33,6 +33,7 @@ export async function bootstrapUser(
       karma:       0,
       streak:      0,
       createdAt:   serverTimestamp(),
+      onboarded:   false,
       expoTokens:  [],       // init array so subsequent arrayUnion works
     })
   }
