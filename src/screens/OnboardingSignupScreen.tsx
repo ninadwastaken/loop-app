@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { firebaseApp } from "../../config/firebase";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { OnboardingSignupScreenProps } from '../types/navigation';
 
@@ -10,14 +12,20 @@ export default function OnboardingSignupScreen({ navigation }: OnboardingSignupS
     return /\.edu$/i.test(email.trim());
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!isEduEmail(email)) {
       setError('Please enter a valid .edu email address.');
       return;
     }
     setError('');
-    // TODO: send verification code, then navigate to CodeInput
-    navigation.navigate('CodeInput', { email });
+    try {
+      const functions = getFunctions(firebaseApp);
+      const sendSignupCode = httpsCallable(functions, 'sendSignupCode');
+      await sendSignupCode({ email });
+      navigation.navigate('CodeInput', { email });
+    } catch (err) {
+      setError('Failed to send verification code. Please try again.');
+    }
   };
 
   return (
