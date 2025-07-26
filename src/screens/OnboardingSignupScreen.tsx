@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { firebaseApp } from "../../config/firebase";
+import app from "../../config/firebase";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { OnboardingSignupScreenProps } from '../types/navigation';
 
@@ -19,7 +19,7 @@ export default function OnboardingSignupScreen({ navigation }: OnboardingSignupS
     }
     setError('');
     try {
-      const functions = getFunctions(firebaseApp);
+      const functions = getFunctions(app);
       const sendSignupCode = httpsCallable(functions, 'sendSignupCode');
       await sendSignupCode({ email });
       navigation.navigate('CodeInput', { email });
