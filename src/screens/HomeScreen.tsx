@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   TouchableOpacity,
+  Share,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
@@ -55,6 +56,7 @@ export default function HomeScreen() {
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefresh] = useState(false);
   const [userVotes, setUserVotes] = useState<Record<string, number>>({});
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
   const [voting, setVoting] = useState<Record<string, boolean>>({})
   const [feedType, setFeedType] = useState<'trending' | 'recent' | 'explore'>('recent');
 
@@ -234,6 +236,31 @@ export default function HomeScreen() {
     }
   }, [loading, uid]);
 
+  // Load poster display names for share messages
+  useEffect(() => {
+    if (!posts.length) return;
+    async function fetchNames() {
+      const uniqueIds = Array.from(new Set(posts.map(p => p.posterId)));
+      const missing = uniqueIds.filter(id => !(id in userNames));
+      if (!missing.length) return;
+      const newMapping: Record<string, string> = {};
+      await Promise.all(
+        missing.map(async id => {
+          const userSnap = await getLoopDoc(doc(db, 'users', id));
+          if (userSnap.exists()) {
+            const data = userSnap.data() as any;
+            // Use displayName or fallback to UID
+            newMapping[id] = data.displayName || data.username || id;
+          }
+        })
+      );
+      if (Object.keys(newMapping).length) {
+        setUserNames(prev => ({ ...prev, ...newMapping }));
+      }
+    }
+    fetchNames();
+  }, [posts]);
+
   // helper to cast a vote and refresh posts
   const handleVote = useCallback(
     async (loopId: string, postId: string, vote: 1 | -1 | 0) => {
@@ -269,6 +296,23 @@ export default function HomeScreen() {
       }
     },
     [uid, loadPosts, voting]
+  );
+
+  // Share handler (moved here so hooks order is stable)
+  const handleShare = useCallback(
+    async (post: Post) => {
+      // Use display name if available, fallback to posterId
+      const posterName = userNames[post.posterId] || post.posterId;
+      const message =
+        `"${post.content}"\n— p/${posterName} in l/${post.loopName}\n\n` +
+        `Open Loop and search “l/${post.loopName}” to see this post.`;
+      try {
+        await Share.share({ message });
+      } catch (err) {
+        console.warn('Share failed:', err);
+      }
+    },
+    [userNames]
   );
 
   // 3) pull-to-refresh
@@ -376,7 +420,8 @@ export default function HomeScreen() {
             >
               {/* Loop Label */}
               <View style={styles.tag}>
-                <Text style={styles.tagText}>{item.loopName}</Text>
+                {/* Display loop with 'l/' prefix */}
+                <Text style={styles.tagText}>{`l/${item.loopName}`}</Text>
               </View>
 
               {/* Content */}
@@ -421,6 +466,16 @@ export default function HomeScreen() {
                   <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
                   <Text style={styles.metaText}>{dateStr}</Text>
                 </View>
+                <TouchableOpacity
+                  style={{ marginLeft: spacing.lg }}
+                  onPress={() => handleShare(item)}
+                >
+                  <Ionicons
+                    name="share-social-outline"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
               </View>
             </TouchableOpacity>
           );

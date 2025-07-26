@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  Share,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -227,6 +228,18 @@ export default function PostDetailScreen({ route, navigation }: any) {
     }
   }
 
+  // Plain-text share handler (Option 1)
+  const handleShare = useCallback(async (p: PostData) => {
+    const message =
+      `"${p.content}"\n— p/${p.posterName} in l/${p.loopName}\n\n` +
+      `Open Loop and search “l/${p.loopName}” to see this post.`;
+    try {
+      await Share.share({ message });
+    } catch (err) {
+      console.warn('Share failed:', err);
+    }
+  }, []);
+
   // Load post info + replies
   const loadAll = useCallback(async () => {
     try {
@@ -395,20 +408,29 @@ export default function PostDetailScreen({ route, navigation }: any) {
   // Render each line
   const renderItem = ({ item }: { item: any }) => {
     if (item.type === 'post') {
-      const p: any = item.data
+      const p: PostData = item.data;
       return (
         <View style={styles.postCard}>
-          <TouchableOpacity
-            onPress={() =>
-              navigation.navigate('UserProfile', { userId: p.posterId })
-            }
-          >
-            <Text style={styles.posterName}>{p.posterName}</Text>
-          </TouchableOpacity>
-          <Text style={styles.loopName}>#{p.loopName}</Text>
+          {/* 1) Loop label on top, bold */}
+          <Text style={styles.loopHeader}>{`l/${p.loopName}`}</Text>
+
+          {/* 2) User and date row */}
+          <View style={styles.metaRow}>
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate('UserProfile', { userId: p.posterId })
+              }
+            >
+              <Text style={styles.userMeta}>{`p/${p.posterName}`}</Text>
+            </TouchableOpacity>
+            <Text style={styles.postMeta}>{p.createdAt}</Text>
+          </View>
+
+          {/* 3) Body content, bold */}
           <Text style={styles.postContent}>{p.content}</Text>
-          <Text style={styles.postMeta}>{p.createdAt}</Text>
-          <View style={styles.voteRow}>
+
+          {/* 4) Actions row: upvote, score, downvote, share */}
+          <View style={styles.actionRow}>
             <TouchableOpacity
               onPress={() =>
                 toggleVote(`loops/${loopId}/posts/${postId}`, postId, 1)
@@ -421,16 +443,11 @@ export default function PostDetailScreen({ route, navigation }: any) {
                 color={localVotes[postId] === 1 ? colors.accent : colors.textTertiary}
               />
             </TouchableOpacity>
-            <Text style={styles.voteCount}>
-              {post?.upvotes !== undefined && post?.downvotes !== undefined
-                ? post.upvotes - post.downvotes
-                : (p.upvotes - p.downvotes)}
-            </Text>
+            <Text style={styles.voteCount}>{p.upvotes - p.downvotes}</Text>
             <TouchableOpacity
               onPress={() =>
                 toggleVote(`loops/${loopId}/posts/${postId}`, postId, -1)
               }
-              style={{ marginLeft: spacing.sm }}
               disabled={voting[postId]}
             >
               <Ionicons
@@ -439,9 +456,18 @@ export default function PostDetailScreen({ route, navigation }: any) {
                 color={localVotes[postId] === -1 ? colors.accent : colors.textTertiary}
               />
             </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => handleShare(p)}
+              style={{ marginLeft: spacing.md }}>
+              <Ionicons
+                name="share-social-outline"
+                size={24}
+                color={colors.textTertiary}
+              />
+            </TouchableOpacity>
           </View>
         </View>
-      )
+      );
     }
 
     // It's a reply
@@ -561,29 +587,47 @@ const styles = StyleSheet.create({
   posterName: {
     color: colors.accent,
     fontWeight: '600',
-    marginLeft: spacing.md,
+    // Removed marginLeft for inline alignment
     marginBottom: spacing.xs,
-  },
-  loopName: {
-    color: colors.primary,
-    marginLeft: spacing.md,
-    marginBottom: spacing.sm,
-    fontWeight: '500',
   },
   postCard: {
     backgroundColor: colors.surface,
-    padding: spacing.md,
-    margin: spacing.md,
-    borderRadius: borderRadius.md,
-  },
-  postContent: {
-    color: colors.textPrimary,
-    fontSize: typography.md,
+    padding: spacing.lg,
+    marginHorizontal: spacing.md,
     marginVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    elevation: 2, // subtle shadow on Android
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 3,
+  },
+  // Reddit-style post header for loop name
+  loopHeader: {
+    color: colors.primary,
+    fontSize: typography.sm,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  userMeta: {
+    color: colors.accent,
+    fontSize: typography.sm,
   },
   postMeta: {
     color: colors.textTertiary,
     fontSize: typography.sm,
+  },
+  postContent: {
+    color: colors.textPrimary,
+    fontSize: typography.lg,
+    fontWeight: '600',
+    marginTop: spacing.sm,       // gap above body text
+    marginBottom: spacing.md,
   },
   voteText: {
     fontSize: typography.md,
@@ -667,14 +711,25 @@ const styles = StyleSheet.create({
     fontSize: typography.lg,
     fontWeight: '600',
   },
-  voteRow: {
+  actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: spacing.sm,
   },
   voteCount: {
-    marginHorizontal: spacing.xs,
+    marginHorizontal: spacing.sm,
     fontSize: typography.md,
     color: colors.textPrimary,
+  },
+  tag: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  tagText: {
+    color: '#fff',
+    fontSize: typography.sm,
+    fontWeight: '600',
   },
 })
