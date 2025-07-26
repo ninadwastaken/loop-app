@@ -9,6 +9,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Share,
+  Alert,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
@@ -472,6 +473,40 @@ export default function HomeScreen() {
                 >
                   <Ionicons
                     name="share-social-outline"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ marginLeft: spacing.lg }}
+                  onPress={() =>
+                    Alert.alert(
+                      'Report Post',
+                      'Why are you reporting this post?',
+                      [
+                        {
+                          text: 'Spam',
+                          onPress: () =>
+                            Alert.alert('Thank you', 'Your report has been received.'),
+                        },
+                        {
+                          text: 'Inappropriate',
+                          onPress: () =>
+                            Alert.alert('Thank you', 'Your report has been received.'),
+                        },
+                        {
+                          text: 'Other',
+                          onPress: () =>
+                            Alert.alert('Thank you', 'Your report has been received.'),
+                        },
+                        { text: 'Cancel', style: 'cancel' },
+                      ],
+                      { cancelable: true }
+                    )
+                  }
+                >
+                  <Ionicons
+                    name="flag-outline"
                     size={20}
                     color={colors.textSecondary}
                   />

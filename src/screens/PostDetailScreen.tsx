@@ -465,6 +465,40 @@ export default function PostDetailScreen({ route, navigation }: any) {
                 color={colors.textTertiary}
               />
             </TouchableOpacity>
+            <TouchableOpacity
+              style={{ marginLeft: spacing.md }}
+              onPress={() =>
+                Alert.alert(
+                  'Report Post',
+                  'Why are you reporting this post?',
+                  [
+                    {
+                      text: 'Spam',
+                      onPress: () =>
+                        Alert.alert('Thank you', 'Your report has been received.'),
+                    },
+                    {
+                      text: 'Inappropriate',
+                      onPress: () =>
+                        Alert.alert('Thank you', 'Your report has been received.'),
+                    },
+                    {
+                      text: 'Other',
+                      onPress: () =>
+                        Alert.alert('Thank you', 'Your report has been received.'),
+                    },
+                    { text: 'Cancel', style: 'cancel' },
+                  ],
+                  { cancelable: true }
+                )
+              }
+            >
+              <Ionicons
+                name="flag-outline"
+                size={24}
+                color={colors.textTertiary}
+              />
+            </TouchableOpacity>
           </View>
         </View>
       );
@@ -715,6 +749,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: spacing.sm,
+  },
+  voteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   voteCount: {
     marginHorizontal: spacing.sm,
