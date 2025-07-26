@@ -6,6 +6,7 @@ import WelcomeCarouselScreen from '../screens/WelcomeCarouselScreen';
 import ProfileSetupScreen from '../screens/ProfileSetupScreen';
 import LoopSelectScreen from '../screens/LoopSelectScreen';
 import { OnboardingStackParamList } from '../types/navigation';
+import LoginScreen from '../screens/LoginScreen';
 
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
 
@@ -15,6 +16,7 @@ export default function OnboardingStack() {
       <Stack.Screen name="Signup" component={OnboardingSignupScreen} />
       <Stack.Screen name="CodeInput" component={CodeInputScreen} />
       <Stack.Screen name="WelcomeCarousel" component={WelcomeCarouselScreen} />
+      <Stack.Screen name="LoginScreen" component={LoginScreen} />
       <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
       <Stack.Screen name="LoopSelect" component={LoopSelectScreen} />
     </Stack.Navigator>

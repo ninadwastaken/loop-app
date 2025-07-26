@@ -1,5 +1,6 @@
 // src/screens/LoginScreen.tsx
 import React, { useState } from 'react';
+import Logo from '../../assets/loop_logo.svg';
 import {
   View,
   Text,
@@ -15,19 +16,18 @@ import {
   spacing,
   typography,
   borderRadius,
-  commonStyles,
 } from '../utils/styles'; // Adjust path if needed
 
 type AuthStackParamList = {
   Login: undefined;
   Signup: undefined;
+  WelcomeCarousel: undefined;
 };
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -37,6 +37,7 @@ export default function LoginScreen({ navigation }: Props) {
     setError('');
     try {
       await login(email.trim(), password);
+      navigation.reset({ index: 0, routes: [{ name: 'WelcomeCarousel' }] });
     } catch (err: any) {
       setError(err.message || 'login failed');
     } finally {
@@ -46,12 +47,14 @@ export default function LoginScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>log in to loop</Text>
+      <Logo width={96} height={96} style={styles.logo} />
+      <Text style={styles.title}>Welcome Back to Loop</Text>
+      <Text style={styles.subtitle}>Available at select schools. Now at NYU.</Text>
 
       <TextInput
         style={styles.input}
-        placeholder="university email"
-        placeholderTextColor={colors.inputPlaceholder}
+        placeholder="...@uni.edu"
+        placeholderTextColor="#bfb9f5"
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
@@ -60,16 +63,8 @@ export default function LoginScreen({ navigation }: Props) {
 
       <TextInput
         style={styles.input}
-        placeholder="username"
-        placeholderTextColor={colors.inputPlaceholder}
-        value={username}
-        onChangeText={setUsername}
-      />
-
-      <TextInput
-        style={styles.input}
         placeholder="password"
-        placeholderTextColor={colors.inputPlaceholder}
+        placeholderTextColor="#bfb9f5"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
@@ -102,26 +97,36 @@ export default function LoginScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#20144c',
     justifyContent: 'center',
     padding: spacing.lg,
+    alignItems: 'center',
   },
   title: {
     fontSize: typography.xxxl,
     fontWeight: '700',
-    color: colors.textPrimary,
+    color: colors.white,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: typography.md,
+    fontWeight: '400',
+    color: '#bfb9f5',
     marginBottom: spacing.lg,
     textAlign: 'center',
   },
   input: {
-    backgroundColor: colors.inputBackground,
-    color: colors.inputText,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
+    width: '100%',
+    maxWidth: 340,
     borderWidth: 1,
-    borderColor: colors.inputBorder,
-    fontSize: typography.md,
+    borderColor: '#6a3cff',
+    borderRadius: 8,
+    padding: 16,
+    fontSize: 16,
+    marginBottom: 12,
+    backgroundColor: '#3a2a72',
+    color: '#fff',
   },
   error: {
     color: colors.error,
@@ -130,24 +135,31 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
   },
   button: {
-    backgroundColor: colors.accent,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
+    backgroundColor: '#6a3cff',
+    borderRadius: 8,
+    paddingVertical: 14,
+    width: '100%',
+    maxWidth: 340,
     alignItems: 'center',
+    marginTop: 10,
     marginBottom: spacing.md,
   },
   buttonText: {
-    color: colors.white,
-    fontWeight: '600',
-    fontSize: typography.md,
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    // textTransform: 'uppercase',
   },
   footerText: {
-    color: colors.textMuted,
+    color: '#bfb9f5',
     textAlign: 'center',
     fontSize: typography.sm,
   },
   link: {
-    color: colors.accent,
+    color: '#6a3cff',
     fontWeight: '600',
+  },
+  logo: {
+    marginBottom: 24,
   },
 });

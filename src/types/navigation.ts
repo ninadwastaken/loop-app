@@ -22,6 +22,7 @@ export type AuthStackParamList = {
 export type OnboardingStackParamList = {
   Signup: undefined;
   CodeInput: {email: string}; // email passed from OnboardingSignupScreen
+  LoginScreen: undefined;
   WelcomeCarousel: undefined;
   ProfileSetup: undefined;
   LoopSelect: undefined;
@@ -58,11 +59,11 @@ export type MainStackParamList = {
  */
 
 // Auth screens
-export type LoginScreenProps     = NativeStackScreenProps<AuthStackParamList, 'Login'>
 export type SignupScreenProps    = NativeStackScreenProps<AuthStackParamList, 'Signup'>
 export type InterestsScreenProps = NativeStackScreenProps<AuthStackParamList, 'Interests'>
 
 // Onboarding screens
+export type LoginScreenProps     = NativeStackScreenProps<OnboardingStackParamList, 'LoginScreen'>
 export type OnboardingSignupScreenProps         = NativeStackScreenProps<OnboardingStackParamList, 'Signup'>;
 export type CodeInputScreenProps      = NativeStackScreenProps<OnboardingStackParamList, 'CodeInput'>;
 export type WelcomeCarouselScreenProps= NativeStackScreenProps<OnboardingStackParamList, 'WelcomeCarousel'>;
